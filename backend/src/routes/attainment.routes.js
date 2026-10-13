@@ -1,18 +1,16 @@
 const express = require("express");
+const {
+  getCoAttainment,
+  getPoAttainment,
+  getPsoAttainment,
+  getFullMatrix,
+} = require("../controllers/attainment.controller");
+
 const router = express.Router();
-const attainmentController = require("../controllers/attainment.controller");
 
-// CO Attainment
-router.get("/co/:subjectId", attainmentController.getCoAttainment);
-router.get("/co/:subjectId/:coId", attainmentController.getSingleCoAttainment);
-
-// PO Attainment
-router.get("/po/:subjectId", attainmentController.getPoAttainment);
-
-// PSO Attainment
-router.get("/pso/:subjectId", attainmentController.getPsoAttainment);
-
-// Full CO-PO / CO-PSO Matrix
-router.get("/matrix/:subjectId", attainmentController.getMatrix);
+router.get("/co/:subjectId", getCoAttainment);
+router.get("/po/:subjectId", getPoAttainment);
+router.get("/pso/:subjectId", getPsoAttainment);
+router.get("/matrix/:subjectId", getFullMatrix);
 
 module.exports = router;

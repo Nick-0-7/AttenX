@@ -477,9 +477,9 @@ body {
 
 .academic-selection-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
-  max-width: 1000px;
+  max-width: 1100px;
   margin-top: 10px;
 }
 
@@ -581,6 +581,71 @@ body {
 .academic-select-hint {
   color: var(--muted);
   font-size: 11px;
+}
+
+.curriculum-badge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: var(--text);
+  max-width: 1100px;
+  animation: fadeIn 0.3s ease;
+}
+
+.curriculum-badge-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.curriculum-badge-banner div {
+  flex: 1;
+}
+
+.curriculum-badge-banner strong {
+  font-size: 13px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.curriculum-badge-banner p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.reset-curriculum-btn {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.reset-curriculum-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-hover);
 }
 
 

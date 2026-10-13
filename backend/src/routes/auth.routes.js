@@ -1,19 +1,12 @@
 const express = require("express");
+const { register, login, me, updatePassword } = require("../controllers/auth.controller");
+const { authenticate } = require("../middleware/auth.middleware");
+
 const router = express.Router();
-const authController = require("../controllers/auth.controller");
-const { authenticate, authorize } = require("../middleware/auth");
 
-// Public endpoints
-router.post("/register", authController.register);
-router.post("/login", authController.login);
-
-// Protected endpoints (Authenticated users)
-router.get("/me", authenticate, authController.getProfile);
-router.put("/change-password", authenticate, authController.changePassword);
-
-// Admin-only user management
-router.get("/users", authenticate, authorize("ADMIN"), authController.getAllUsers);
-router.put("/users/:id/role", authenticate, authorize("ADMIN"), authController.updateUserRole);
-router.delete("/users/:id", authenticate, authorize("ADMIN"), authController.deleteUser);
+router.post("/register", register);
+router.post("/login", login);
+router.get("/me", authenticate, me);
+router.put("/update-password", authenticate, updatePassword);
 
 module.exports = router;

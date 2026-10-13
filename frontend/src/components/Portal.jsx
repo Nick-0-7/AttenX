@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
+import { curriculumSubjects } from "../data/curriculumData";
 import "../templates/Portal.css";
 import attainxLogo from "../assets/attainx-logo.png";
 
@@ -99,6 +100,72 @@ function Portal() {
   };
 
   const [mapping, setMapping] = useState(createEmptyMapping());
+
+  // Subject Selection and Auto-fetch state
+  const [selectedSubjectCode, setSelectedSubjectCode] = useState("");
+  const [selectedSubjectTitle, setSelectedSubjectTitle] = useState("");
+  const [isAutoLoaded, setIsAutoLoaded] = useState(false);
+
+  // Available subjects filtered by Academic Year
+  const availableSubjects = curriculumSubjects.filter((s) => {
+    if (!academicYear) return true;
+    return s.academicYear === academicYear;
+  });
+
+  const handleSubjectSelect = (code) => {
+    setSelectedSubjectCode(code);
+    if (!code) {
+      setSelectedSubjectTitle("");
+      setIsAutoLoaded(false);
+      return;
+    }
+
+    const found = curriculumSubjects.find((s) => s.code === code);
+    if (found) {
+      setSelectedSubjectTitle(found.title);
+      setIsAutoLoaded(true);
+
+      // 1. Auto-fill Course Outcomes
+      setCos({
+        CO1: found.cos?.CO1 || "",
+        CO2: found.cos?.CO2 || "",
+        CO3: found.cos?.CO3 || "",
+        CO4: found.cos?.CO4 || "",
+        CO5: found.cos?.CO5 || "",
+        CO6: found.cos?.CO6 || "",
+      });
+
+      // 2. Auto-fill CO-PO mapping matrix
+      const newMapping = createEmptyMapping();
+      rows.forEach((r) => {
+        if (found.mapping && found.mapping[r]) {
+          columns.forEach((col) => {
+            const val =
+              found.mapping[r][col] ??
+              found.mapping[r][col.replace("PO", "PO ")] ??
+              found.mapping[r][col.replace("PSO", "PSO ")] ??
+              "";
+            if (val !== undefined && val !== null && val !== "") {
+              newMapping[r][col] = String(val);
+            }
+          });
+        }
+      });
+      setMapping(newMapping);
+    }
+  };
+
+  const handleAcademicYearChange = (newYear) => {
+    setAcademicYear(newYear);
+    if (selectedSubjectCode) {
+      const currentSub = curriculumSubjects.find((s) => s.code === selectedSubjectCode);
+      if (currentSub && currentSub.academicYear !== newYear) {
+        setSelectedSubjectCode("");
+        setSelectedSubjectTitle("");
+        setIsAutoLoaded(false);
+      }
+    }
+  };
 
   // =========================================
   // TEMPLATE GENERATOR STATE
@@ -313,6 +380,8 @@ function Portal() {
             facultyName,
             academicYear,
             department,
+            courseCode: selectedSubjectCode,
+            courseTitle: selectedSubjectTitle,
             targetCA1,
             targetCA2,
             cos,
@@ -828,7 +897,7 @@ function Portal() {
                       id="academic-year-select"
                       className="portal-select"
                       value={academicYear}
-                      onChange={(e) => setAcademicYear(e.target.value)}
+                      onChange={(e) => handleAcademicYearChange(e.target.value)}
                     >
                       <option value="FY">FY</option>
                       <option value="SY">SY</option>
@@ -867,7 +936,59 @@ function Portal() {
                     Select department for this course
                   </small>
                 </div>
+
+                <div className="academic-select-card">
+                  <div className="academic-select-label-wrap">
+                    <label htmlFor="academic-subject-select">SELECT SUBJECT</label>
+                    <span className="selection-badge">Curriculum</span>
+                  </div>
+
+                  <div className="custom-select-container">
+                    <select
+                      id="academic-subject-select"
+                      className="portal-select"
+                      value={selectedSubjectCode}
+                      onChange={(e) => handleSubjectSelect(e.target.value)}
+                    >
+                      <option value="">-- Choose Subject (Auto-fill) --</option>
+                      {availableSubjects.map((sub) => (
+                        <option key={sub.code} value={sub.code}>
+                          {sub.code} - {sub.title}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="select-dropdown-indicator">▾</span>
+                  </div>
+                  <small className="academic-select-hint">
+                    Auto-fetches COs & CO/PO matrix (editable)
+                  </small>
+                </div>
               </div>
+
+              {isAutoLoaded && (
+                <div className="curriculum-badge-banner">
+                  <span className="curriculum-badge-icon">✓</span>
+                  <div>
+                    <strong>
+                      Loaded Curriculum for {selectedSubjectCode}: {selectedSubjectTitle}
+                    </strong>
+                    <p>
+                      Course Outcomes and CO-PO Correlation Matrix have been auto-populated below from NEP syllabus. You can freely edit any statement or mapping value.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="reset-curriculum-btn"
+                    onClick={() => {
+                      setSelectedSubjectCode("");
+                      setSelectedSubjectTitle("");
+                      setIsAutoLoaded(false);
+                    }}
+                  >
+                    Reset / Custom
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* =====================================
@@ -878,7 +999,11 @@ function Portal() {
                 <span>04</span>
                 <div>
                   <h2>Course Outcomes</h2>
-                  <p>Enter course outcome statements (use ↑ ↓ arrow keys to navigate).</p>
+                  <p>
+                    {isAutoLoaded
+                      ? "Auto-fetched from syllabus. Click and edit any statement as desired."
+                      : "Enter course outcome statements (use ↑ ↓ arrow keys to navigate)."}
+                  </p>
                 </div>
               </div>
 
@@ -909,7 +1034,11 @@ function Portal() {
                 <span>05</span>
                 <div>
                   <h2>CO / PO Mapping</h2>
-                  <p>Enter the mapping values (0 to 3).</p>
+                  <p>
+                    {isAutoLoaded
+                      ? "Auto-fetched correlation matrix (0 to 3). Click any cell to customize."
+                      : "Enter the mapping values (0 to 3)."}
+                  </p>
                 </div>
               </div>
 

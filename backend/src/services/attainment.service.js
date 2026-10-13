@@ -1,461 +1,271 @@
-const prisma = require("../config/prisma");
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const DEFAULT_THRESHOLD = 60; // marks out of 100
-const DEFAULT_MAX_MARKS = 100;
-
-// ─── CO Attainment ────────────────────────────────────────────────────────────
+const prisma = require("../config/db");
 
 /**
- * Calculate CO-wise attainment for a subject.
- *
- * Formula:
- *   CO Attainment (%) = (students who scored >= threshold / total students) × 100
- *
- * @param {number} subjectId
- * @param {number} [threshold=60]
- * @returns {Promise<Object>}
+ * 4.1 Max Marks Dynamic Scale Detection
  */
-const calculateCoAttainment = async (subjectId, threshold = DEFAULT_THRESHOLD) => {
-    // Verify subject exists and pull COs
-    const subject = await prisma.subject.findUnique({
-        where: { id: Number(subjectId) },
+function detectMaxMarks(marksArray) {
+  if (!marksArray || marksArray.length === 0) return 20;
+  const maxObserved = Math.max(...marksArray.filter((m) => typeof m === "number" && !isNaN(m)));
+  if (!isFinite(maxObserved) || maxObserved <= 0) return 20;
+
+  const standardScales = [10, 15, 20, 25, 30, 40, 50, 75, 100];
+  for (const scale of standardScales) {
+    if (maxObserved <= scale) return scale;
+  }
+  return 100;
+}
+
+/**
+ * 4.2 NBA Attainment Level Mapping (0 to 3 scale)
+ */
+function getNbaLevel(percentage) {
+  if (percentage >= 80) return 3;
+  if (percentage >= 70) return 2;
+  if (percentage >= 60) return 1;
+  return 0;
+}
+
+/**
+ * 4.3 Indirect Attainment: Course Exit Survey (CES)
+ */
+function calculateCesScore(countX, countY, countZ) {
+  const x = Number(countX) || 0;
+  const y = Number(countY) || 0;
+  const z = Number(countZ) || 0;
+  const total = x + y + z;
+  if (total === 0) return 0;
+  const score = (3 * x + 2 * y + 1 * z) / total;
+  return Number(score.toFixed(2));
+}
+
+/**
+ * 4.4 Final Overall CO Attainment (90% Direct + 10% Indirect)
+ */
+function calculateFinalCoScore(directLevel, cesScore) {
+  const finalScore = 0.9 * directLevel + 0.1 * cesScore;
+  return Number(finalScore.toFixed(2));
+}
+
+/**
+ * Full calculation for a specific Subject
+ */
+async function calculateSubjectAttainment(subjectId, options = {}) {
+  const targetCa1 = Number(options.targetCa1 || options.thresholdCa1 || options.threshold || 60);
+  const targetCa2 = Number(options.targetCa2 || options.thresholdCa2 || options.threshold || 60);
+
+  // 1. Fetch Subject with COs, mappings, marks, and CES
+  const subject = await prisma.subject.findUnique({
+    where: { id: Number(subjectId) },
+    include: {
+      teacher: true,
+      department: true,
+      cos: {
+        orderBy: { code: "asc" },
+      },
+      studentMarks: true,
+      cesFeedbacks: true,
+      coPoMappings: {
         include: {
-            cos: {
-                orderBy: { code: "asc" }
-            }
-        }
-    });
-
-    if (!subject) {
-        const err = new Error(`Subject with id ${subjectId} not found`);
-        err.statusCode = 404;
-        throw err;
-    }
-
-    // Fetch all student marks for this subject in one query
-    const allMarks = await prisma.studentMark.findMany({
-        where: { subjectId: Number(subjectId) }
-    });
-
-    // Group marks by coId
-    const marksByCoId = {};
-    for (const mark of allMarks) {
-        if (!marksByCoId[mark.coId]) {
-            marksByCoId[mark.coId] = [];
-        }
-        marksByCoId[mark.coId].push(mark);
-    }
-
-    const coAttainments = subject.cos.map((co) => {
-        const marks = marksByCoId[co.id] || [];
-        const totalStudents = marks.length;
-
-        if (totalStudents === 0) {
-            return {
-                coId: co.id,
-                coCode: co.code,
-                coStatement: co.statement,
-                totalStudents: 0,
-                studentsAboveThreshold: 0,
-                attainmentPercent: null
-            };
-        }
-
-        const studentsAboveThreshold = marks.filter(
-            (m) => m.marks >= threshold
-        ).length;
-
-        const attainmentPercent = parseFloat(
-            ((studentsAboveThreshold / totalStudents) * 100).toFixed(2)
-        );
-
-        return {
-            coId: co.id,
-            coCode: co.code,
-            coStatement: co.statement,
-            totalStudents,
-            studentsAboveThreshold,
-            attainmentPercent
-        };
-    });
-
-    return {
-        subjectId: subject.id,
-        subjectCode: subject.code,
-        subjectName: subject.name,
-        threshold,
-        maxMarks: DEFAULT_MAX_MARKS,
-        data: coAttainments
-    };
-};
-
-/**
- * Calculate attainment for a single CO within a subject.
- *
- * @param {number} subjectId
- * @param {number} coId
- * @param {number} [threshold=60]
- */
-const calculateSingleCoAttainment = async (
-    subjectId,
-    coId,
-    threshold = DEFAULT_THRESHOLD
-) => {
-    const result = await calculateCoAttainment(subjectId, threshold);
-    const co = result.data.find((c) => c.coId === Number(coId));
-
-    if (!co) {
-        const err = new Error(
-            `CO with id ${coId} not found in subject ${subjectId}`
-        );
-        err.statusCode = 404;
-        throw err;
-    }
-
-    return {
-        subjectId: result.subjectId,
-        subjectCode: result.subjectCode,
-        subjectName: result.subjectName,
-        threshold: result.threshold,
-        maxMarks: result.maxMarks,
-        data: co
-    };
-};
-
-// ─── PO Attainment ────────────────────────────────────────────────────────────
-
-/**
- * Calculate PO-wise attainment for a subject using weighted average.
- *
- * Formula:
- *   PO Attainment = Σ (CO_attainment% × mapping_level) / Σ mapping_level
- *
- * Mapping level 0 is excluded from the calculation.
- *
- * @param {number} subjectId
- * @param {number} [threshold=60]
- */
-const calculatePoAttainment = async (subjectId, threshold = DEFAULT_THRESHOLD) => {
-    const coResult = await calculateCoAttainment(subjectId, threshold);
-
-    // Build a map: coId → attainmentPercent
-    const coAttainmentMap = {};
-    for (const co of coResult.data) {
-        coAttainmentMap[co.coId] = co.attainmentPercent;
-    }
-
-    // Fetch all CO→PO mappings for this subject (level > 0 only)
-    const mappings = await prisma.coPoMapping.findMany({
-        where: {
-            subjectId: Number(subjectId),
-            poId: { not: null },
-            level: { gt: 0 }
+          po: true,
+          pso: true,
         },
-        include: {
-            po: true
-        }
-    });
+      },
+    },
+  });
 
-    // Group by PO
-    const poMap = {};
-    for (const mapping of mappings) {
-        const poId = mapping.poId;
-        if (!poMap[poId]) {
-            poMap[poId] = {
-                poId: mapping.po.id,
-                poCode: mapping.po.code,
-                poStatement: mapping.po.statement,
-                contributions: []
-            };
-        }
-        const coAttainment = coAttainmentMap[mapping.coId];
-        if (coAttainment !== null && coAttainment !== undefined) {
-            poMap[poId].contributions.push({
-                coId: mapping.coId,
-                level: mapping.level,
-                coAttainmentPercent: coAttainment
-            });
-        }
-    }
+  if (!subject) {
+    throw new Error(`Subject with ID ${subjectId} not found.`);
+  }
 
-    // Compute weighted average per PO
-    const poAttainments = Object.values(poMap).map((po) => {
-        if (po.contributions.length === 0) {
-            return {
-                poId: po.poId,
-                poCode: po.poCode,
-                poStatement: po.poStatement,
-                attainmentPercent: null,
-                contributions: []
-            };
-        }
+  // Fetch all Program Outcomes and PSOs
+  const programOutcomes = await prisma.programOutcome.findMany({
+    orderBy: { code: "asc" },
+  });
+  const programSpecificOutcomes = await prisma.programSpecificOutcome.findMany({
+    orderBy: { code: "asc" },
+  });
 
-        const sumWeightedAttainment = po.contributions.reduce(
-            (sum, c) => sum + c.coAttainmentPercent * c.level,
-            0
-        );
-        const sumLevels = po.contributions.reduce(
-            (sum, c) => sum + c.level,
-            0
-        );
+  const cos = subject.cos;
+  const numCos = cos.length;
+  const ca1CutoffIndex = Math.ceil(numCos / 2);
 
-        const attainmentPercent =
-            sumLevels > 0
-                ? parseFloat((sumWeightedAttainment / sumLevels).toFixed(2))
-                : null;
+  // Unique student count enrolled in this subject
+  const uniqueStudents = new Set(subject.studentMarks.map((m) => m.studentRollNo));
+  const totalStudentsEnrolled = uniqueStudents.size || 1; // prevent div by 0
 
-        return {
-            poId: po.poId,
-            poCode: po.poCode,
-            poStatement: po.poStatement,
-            attainmentPercent,
-            contributions: po.contributions
-        };
-    });
+  // 2. Direct CO Attainment Calculations
+  const coResults = cos.map((co, index) => {
+    const isCa1 = index < ca1CutoffIndex;
+    const targetPercentage = isCa1 ? targetCa1 : targetCa2;
+    const assessmentGroup = isCa1 ? "CA1" : "CA2";
 
-    // Sort by PO code
-    poAttainments.sort((a, b) => a.poCode.localeCompare(b.poCode));
+    const marksForCo = subject.studentMarks
+      .filter((m) => m.coId === co.id)
+      .map((m) => m.marks);
+
+    const maxMarks = detectMaxMarks(marksForCo);
+    const cutoffMarks = Number(((targetPercentage / 100) * maxMarks).toFixed(2));
+
+    const studentsAttempted = marksForCo.length;
+    const studentsAboveCutoff = marksForCo.filter((m) => m >= cutoffMarks).length;
+
+    const attainmentPercentage = totalStudentsEnrolled > 0
+      ? Number(((studentsAboveCutoff / totalStudentsEnrolled) * 100).toFixed(2))
+      : 0;
+
+    const directLevel = getNbaLevel(attainmentPercentage);
+
+    // CES Indirect
+    const ces = subject.cesFeedbacks.find((c) => c.coId === co.id) || {
+      countX: 0,
+      countY: 0,
+      countZ: 0,
+    };
+    const cesScore = calculateCesScore(ces.countX, ces.countY, ces.countZ);
+
+    // Final CO Attainment
+    const finalCoScore = calculateFinalCoScore(directLevel, cesScore);
 
     return {
-        subjectId: coResult.subjectId,
-        subjectCode: coResult.subjectCode,
-        subjectName: coResult.subjectName,
-        threshold,
-        data: poAttainments
+      coId: co.id,
+      code: co.code,
+      statement: co.statement,
+      assessmentGroup,
+      targetPercentage,
+      maxMarks,
+      cutoffMarks,
+      studentsAttempted,
+      studentsAboveCutoff,
+      totalStudentsEnrolled,
+      attainmentPercentage,
+      directLevel,
+      ces: {
+        countX: ces.countX,
+        countY: ces.countY,
+        countZ: ces.countZ,
+        cesScore,
+      },
+      finalCoScore,
     };
-};
+  });
 
-// ─── PSO Attainment ───────────────────────────────────────────────────────────
-
-/**
- * Calculate PSO-wise attainment for a subject using weighted average.
- * Same formula as PO attainment.
- *
- * @param {number} subjectId
- * @param {number} [threshold=60]
- */
-const calculatePsoAttainment = async (subjectId, threshold = DEFAULT_THRESHOLD) => {
-    const coResult = await calculateCoAttainment(subjectId, threshold);
-
-    const coAttainmentMap = {};
-    for (const co of coResult.data) {
-        coAttainmentMap[co.coId] = co.attainmentPercent;
-    }
-
-    const mappings = await prisma.coPoMapping.findMany({
-        where: {
-            subjectId: Number(subjectId),
-            psoId: { not: null },
-            level: { gt: 0 }
-        },
-        include: {
-            pso: true
-        }
-    });
-
-    const psoMap = {};
-    for (const mapping of mappings) {
-        const psoId = mapping.psoId;
-        if (!psoMap[psoId]) {
-            psoMap[psoId] = {
-                psoId: mapping.pso.id,
-                psoCode: mapping.pso.code,
-                psoStatement: mapping.pso.statement,
-                contributions: []
-            };
-        }
-        const coAttainment = coAttainmentMap[mapping.coId];
-        if (coAttainment !== null && coAttainment !== undefined) {
-            psoMap[psoId].contributions.push({
-                coId: mapping.coId,
-                level: mapping.level,
-                coAttainmentPercent: coAttainment
-            });
-        }
-    }
-
-    const psoAttainments = Object.values(psoMap).map((pso) => {
-        if (pso.contributions.length === 0) {
-            return {
-                psoId: pso.psoId,
-                psoCode: pso.psoCode,
-                psoStatement: pso.psoStatement,
-                attainmentPercent: null,
-                contributions: []
-            };
-        }
-
-        const sumWeightedAttainment = pso.contributions.reduce(
-            (sum, c) => sum + c.coAttainmentPercent * c.level,
-            0
-        );
-        const sumLevels = pso.contributions.reduce(
-            (sum, c) => sum + c.level,
-            0
-        );
-
-        const attainmentPercent =
-            sumLevels > 0
-                ? parseFloat((sumWeightedAttainment / sumLevels).toFixed(2))
-                : null;
-
-        return {
-            psoId: pso.psoId,
-            psoCode: pso.psoCode,
-            psoStatement: pso.psoStatement,
-            attainmentPercent,
-            contributions: pso.contributions
-        };
-    });
-
-    psoAttainments.sort((a, b) => a.psoCode.localeCompare(b.psoCode));
-
-    return {
-        subjectId: coResult.subjectId,
-        subjectCode: coResult.subjectCode,
-        subjectName: coResult.subjectName,
-        threshold,
-        data: psoAttainments
+  // 3. PO / PSO Attainment Matrix Calculations
+  const poResults = {};
+  programOutcomes.forEach((po) => {
+    poResults[po.code] = {
+      poId: po.id,
+      code: po.code,
+      statement: po.statement,
+      cellValues: {}, // coCode -> { level, cellAttainment }
+      mappedCoCount: 0,
+      sumCellAttainment: 0,
+      directPoScore: 0,
+      weightedSum: 0,
+      totalWeights: 0,
+      weightedPercentage: 0,
     };
-};
+  });
 
-// ─── CO-PO / CO-PSO Matrix ────────────────────────────────────────────────────
+  const psoResults = {};
+  programSpecificOutcomes.forEach((pso) => {
+    psoResults[pso.code] = {
+      psoId: pso.id,
+      code: pso.code,
+      statement: pso.statement,
+      cellValues: {},
+      mappedCoCount: 0,
+      sumCellAttainment: 0,
+      directPsoScore: 0,
+      weightedSum: 0,
+      totalWeights: 0,
+      weightedPercentage: 0,
+    };
+  });
 
-/**
- * Build the full CO-PO and CO-PSO matrix for a subject.
- *
- * Returns:
- * {
- *   pos: [{ id, code }],
- *   psos: [{ id, code }],
- *   cos: [
- *     {
- *       coId, coCode, coStatement, attainmentPercent,
- *       poLevels: { [poId]: level | null },
- *       psoLevels: { [psoId]: level | null }
- *     }
- *   ],
- *   poAttainments: { [poId]: attainmentPercent | null },
- *   psoAttainments: { [psoId]: attainmentPercent | null }
- * }
- *
- * @param {number} subjectId
- * @param {number} [threshold=60]
- */
-const buildMatrix = async (subjectId, threshold = DEFAULT_THRESHOLD) => {
-    const [coResult, poResult, psoResult] = await Promise.all([
-        calculateCoAttainment(subjectId, threshold),
-        calculatePoAttainment(subjectId, threshold),
-        calculatePsoAttainment(subjectId, threshold)
-    ]);
+  // Process mappings
+  subject.coPoMappings.forEach((mapping) => {
+    const coData = coResults.find((c) => c.coId === mapping.coId);
+    if (!coData || mapping.level <= 0) return;
 
-    // Fetch all mappings for this subject (all levels including 0)
-    const allMappings = await prisma.coPoMapping.findMany({
-        where: { subjectId: Number(subjectId) },
-        include: {
-            po: true,
-            pso: true
-        }
-    });
-
-    // Collect unique POs and PSOs from mappings
-    const posMap = {};
-    const psosMap = {};
-    for (const m of allMappings) {
-        if (m.poId && m.po) {
-            posMap[m.poId] = { id: m.po.id, code: m.po.code };
-        }
-        if (m.psoId && m.pso) {
-            psosMap[m.psoId] = { id: m.pso.id, code: m.pso.code };
-        }
-    }
-
-    const pos = Object.values(posMap).sort((a, b) =>
-        a.code.localeCompare(b.code)
-    );
-    const psos = Object.values(psosMap).sort((a, b) =>
-        a.code.localeCompare(b.code)
+    // Cell Attainment formula: ceil( (L * Final CO) / 3.0 * 100 ) / 100
+    const cellAttainment = Number(
+      (Math.ceil(((mapping.level * coData.finalCoScore) / 3.0) * 100) / 100).toFixed(2)
     );
 
-    // Build quick-access: coId → { poId → level, psoId → level }
-    const coPoLevelMap = {};
-    const coPsoLevelMap = {};
-    for (const m of allMappings) {
-        if (m.poId) {
-            if (!coPoLevelMap[m.coId]) coPoLevelMap[m.coId] = {};
-            coPoLevelMap[m.coId][m.poId] = m.level;
-        }
-        if (m.psoId) {
-            if (!coPsoLevelMap[m.coId]) coPsoLevelMap[m.coId] = {};
-            coPsoLevelMap[m.coId][m.psoId] = m.level;
-        }
-    }
-
-    // Build CO rows
-    const coAttainmentMap = {};
-    for (const co of coResult.data) {
-        coAttainmentMap[co.coId] = co.attainmentPercent;
-    }
-
-    const coRows = coResult.data.map((co) => {
-        const poLevels = {};
-        for (const po of pos) {
-            poLevels[po.id] =
-                coPoLevelMap[co.coId]?.[po.id] !== undefined
-                    ? coPoLevelMap[co.coId][po.id]
-                    : null;
-        }
-
-        const psoLevels = {};
-        for (const pso of psos) {
-            psoLevels[pso.id] =
-                coPsoLevelMap[co.coId]?.[pso.id] !== undefined
-                    ? coPsoLevelMap[co.coId][pso.id]
-                    : null;
-        }
-
-        return {
-            coId: co.coId,
-            coCode: co.coCode,
-            coStatement: co.coStatement,
-            totalStudents: co.totalStudents,
-            studentsAboveThreshold: co.studentsAboveThreshold,
-            attainmentPercent: co.attainmentPercent,
-            poLevels,
-            psoLevels
+    if (mapping.poId && mapping.po) {
+      const p = poResults[mapping.po.code];
+      if (p) {
+        p.cellValues[coData.code] = {
+          level: mapping.level,
+          cellAttainment,
         };
-    });
-
-    // Build attainment footer rows
-    const poAttainments = {};
-    for (const po of poResult.data) {
-        poAttainments[po.poId] = po.attainmentPercent;
+        p.mappedCoCount += 1;
+        p.sumCellAttainment += cellAttainment;
+        p.weightedSum += coData.attainmentPercentage * mapping.level;
+        p.totalWeights += mapping.level;
+      }
     }
 
-    const psoAttainments = {};
-    for (const pso of psoResult.data) {
-        psoAttainments[pso.psoId] = pso.attainmentPercent;
+    if (mapping.psoId && mapping.pso) {
+      const ps = psoResults[mapping.pso.code];
+      if (ps) {
+        ps.cellValues[coData.code] = {
+          level: mapping.level,
+          cellAttainment,
+        };
+        ps.mappedCoCount += 1;
+        ps.sumCellAttainment += cellAttainment;
+        ps.weightedSum += coData.attainmentPercentage * mapping.level;
+        ps.totalWeights += mapping.level;
+      }
     }
+  });
 
-    return {
-        subjectId: coResult.subjectId,
-        subjectCode: coResult.subjectCode,
-        subjectName: coResult.subjectName,
-        threshold,
-        pos,
-        psos,
-        cos: coRows,
-        poAttainments,
-        psoAttainments
-    };
-};
+  // Finalize PO summary averages
+  Object.keys(poResults).forEach((code) => {
+    const item = poResults[code];
+    item.directPoScore = item.mappedCoCount > 0
+      ? Number((item.sumCellAttainment / item.mappedCoCount).toFixed(2))
+      : 0;
+    item.weightedPercentage = item.totalWeights > 0
+      ? Number((item.weightedSum / item.totalWeights).toFixed(2))
+      : 0;
+  });
+
+  // Finalize PSO summary averages
+  Object.keys(psoResults).forEach((code) => {
+    const item = psoResults[code];
+    item.directPsoScore = item.mappedCoCount > 0
+      ? Number((item.sumCellAttainment / item.mappedCoCount).toFixed(2))
+      : 0;
+    item.weightedPercentage = item.totalWeights > 0
+      ? Number((item.weightedSum / item.totalWeights).toFixed(2))
+      : 0;
+  });
+
+  return {
+    subject: {
+      id: subject.id,
+      code: subject.code,
+      name: subject.name,
+      semester: subject.semester,
+      academicYear: subject.academicYear,
+      teacher: subject.teacher?.name,
+      department: subject.department?.name,
+    },
+    totalStudentsEnrolled,
+    targetCa1,
+    targetCa2,
+    coResults,
+    poResults,
+    psoResults,
+  };
+}
 
 module.exports = {
-    calculateCoAttainment,
-    calculateSingleCoAttainment,
-    calculatePoAttainment,
-    calculatePsoAttainment,
-    buildMatrix
+  detectMaxMarks,
+  getNbaLevel,
+  calculateCesScore,
+  calculateFinalCoScore,
+  calculateSubjectAttainment,
 };
