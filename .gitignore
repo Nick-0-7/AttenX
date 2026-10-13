@@ -21,3 +21,7 @@ build/
 .cursor/
 .devin/
 .windsurf/
+
+# Generated outputs
+test_report.docx
+output/AttainX_Attainment_Report_*
