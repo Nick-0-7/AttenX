@@ -16,6 +16,9 @@ function Portal() {
   const [reportHtml, setReportHtml] = useState("");
   const [reportBlob, setReportBlob] = useState(null);
   const [reportError, setReportError] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [useSampleDataset, setUseSampleDataset] = useState(false);
+  const [calculationData, setCalculationData] = useState(null);
 
   // Temporary hardcoded logged-in user
   const [user, setUser] = useState({
@@ -359,7 +362,8 @@ function Portal() {
   };
 
   // =========================================
-  // GENERATE ATTAINMENT REPORT
+  // =========================================
+  // GENERATE ATTAINMENT REPORT & LIVE ANALYSIS
   // =========================================
   const calculateAttainment = async () => {
     setIsGenerating(true);
@@ -368,6 +372,56 @@ function Portal() {
     setReportBlob(null);
 
     try {
+      let calcData = null;
+
+      // 1. Calculate live attainment from uploaded file or bundled sample dataset
+      if (uploadedFile) {
+        const formData = new FormData();
+        formData.append("file", uploadedFile);
+        formData.append("cos", JSON.stringify(cos));
+        formData.append("mapping", JSON.stringify(mapping));
+        formData.append("targetCA1", targetCA1);
+        formData.append("targetCA2", targetCA2);
+        formData.append("attainmentType", attainmentType);
+
+        const calcRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!calcRes.ok) {
+          const err = await calcRes.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to calculate attainment from uploaded file.");
+        }
+        const calcJson = await calcRes.json();
+        calcData = calcJson.data;
+      } else {
+        const calcRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            cos,
+            mapping,
+            targetCA1,
+            targetCA2,
+            attainmentType,
+            useSample: true,
+          }),
+        });
+
+        if (!calcRes.ok) {
+          const err = await calcRes.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to calculate attainment.");
+        }
+        const calcJson = await calcRes.json();
+        calcData = calcJson.data;
+      }
+
+      setCalculationData(calcData);
+
+      // 2. Generate full DOCX Word report populated with real calculated values
       const response = await fetch(
         "http://localhost:5000/api/reports/create-report",
         {
@@ -386,6 +440,7 @@ function Portal() {
             targetCA2,
             cos,
             mapping,
+            calculatedAttainment: calcData,
           }),
         }
       );
@@ -409,7 +464,7 @@ function Portal() {
 
       setTimeout(() => {
         document
-          .getElementById("generated-report")
+          .getElementById("attainment-results-section")
           ?.scrollIntoView({
             behavior: "smooth",
             block: "start",
@@ -427,7 +482,7 @@ function Portal() {
   };
 
   // =========================================
-  // FILE UPLOAD
+  // FILE UPLOAD & SAMPLE DATASET
   // =========================================
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -439,7 +494,18 @@ function Portal() {
       e.target.value = "";
       return;
     }
-    console.log("Uploaded file:", file.name);
+    setUploadedFile(file);
+    setUseSampleDataset(false);
+  };
+
+  const loadSampleDataset = () => {
+    setUseSampleDataset(true);
+    setUploadedFile(null);
+  };
+
+  const removeUploadedFile = () => {
+    setUploadedFile(null);
+    setUseSampleDataset(false);
   };
 
   // =========================================
@@ -1100,20 +1166,63 @@ function Portal() {
             <section className="portal-section">
               <div className="section-title">
                 <span>06</span>
-                <h2>Import Data</h2>
+                <div>
+                  <h2>Import Student Marks</h2>
+                  <p>Upload your continuous assessment marksheet (.xlsx, .csv) or test with the built-in 500-student dataset.</p>
+                </div>
               </div>
 
-              <label className="upload-box">
-                <input
-                  type="file"
-                  accept=".csv,.xls,.xlsx"
-                  onChange={handleFileUpload}
-                />
+              <div className="upload-options-container">
+                {uploadedFile ? (
+                  <div className="upload-file-status">
+                    <div className="file-info-group">
+                      <div className="file-icon">XLS</div>
+                      <div className="file-details">
+                        <strong>{uploadedFile.name}</strong>
+                        <span>{(uploadedFile.size / 1024).toFixed(1)} KB · Ready to evaluate</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="remove-file-btn"
+                      onClick={removeUploadedFile}
+                    >
+                      ✕ Remove File
+                    </button>
+                  </div>
+                ) : (
+                  <label className="upload-box">
+                    <input
+                      type="file"
+                      accept=".csv,.xls,.xlsx"
+                      onChange={handleFileUpload}
+                    />
+                    <div className="upload-arrow">↑</div>
+                    <strong>Upload Student Marksheet</strong>
+                    <span>Supports CSV · XLS · XLSX (CA1, CA2, MSE, ESE or CO1..CO6 columns)</span>
+                  </label>
+                )}
 
-                <div className="upload-arrow">↑</div>
-                <strong>Upload CSV or Excel file</strong>
-                <span>CSV · XLS · XLSX</span>
-              </label>
+                {!uploadedFile && (
+                  <div className="sample-dataset-prompt">
+                    <div>
+                      <strong>Need sample data to evaluate immediately?</strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--muted)" }}>
+                        {useSampleDataset
+                          ? "✓ Using bundled demo dataset: 500 Students with CA1, CA2, MSE, ESE & Course Exit Survey."
+                          : "Load the official institutional sample dataset (500 Students) with full assessment & survey records."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sample-btn"
+                      onClick={loadSampleDataset}
+                    >
+                      {useSampleDataset ? "✓ Sample Loaded" : "Load 500-Student Demo"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* =====================================
@@ -1122,7 +1231,6 @@ function Portal() {
             <section className="calculate-section">
               <div>
                 <span className="calculate-label">READY TO ANALYZE?</span>
-
                 <h2>
                   Calculate
                   <br />
@@ -1133,13 +1241,13 @@ function Portal() {
               <div className="calculate-actions-container">
                 <div className="set-target-card">
                   <div className="target-header">
-                    <span className="target-title-label">SET TARGET</span>
-                    <span className="target-default-badge">Default 60%</span>
+                    <span className="target-title-label">SET TARGET CUTOFF</span>
+                    <span className="target-default-badge">NBA Standard 60%</span>
                   </div>
 
                   <div className="target-inputs-row">
                     <div className="target-field">
-                      <label htmlFor="target-ca1-input">CA1</label>
+                      <label htmlFor="target-ca1-input">CA1 / Mid-Sem</label>
                       <div className="target-input-box">
                         <input
                           id="target-ca1-input"
@@ -1155,7 +1263,7 @@ function Portal() {
                     </div>
 
                     <div className="target-field">
-                      <label htmlFor="target-ca2-input">CA2</label>
+                      <label htmlFor="target-ca2-input">CA2 / End-Sem</label>
                       <div className="target-input-box">
                         <input
                           id="target-ca2-input"
@@ -1177,30 +1285,178 @@ function Portal() {
                   onClick={calculateAttainment}
                   disabled={isGenerating}
                 >
-                  {isGenerating ? "Generating Report..." : "Calculate Attainment"}
+                  {isGenerating ? "Analyzing & Generating..." : "Calculate Attainment"}
                   <span>↗</span>
                 </button>
               </div>
             </section>
 
             {/* =====================================
-                GENERATED REPORT
+                LIVE ATTAINMENT EVALUATION DASHBOARD
+            ===================================== */}
+            {calculationData && (
+              <section
+                className="portal-section attainment-dashboard-section"
+                id="attainment-results-section"
+              >
+                <div className="section-title">
+                  <span>07</span>
+                  <div>
+                    <h2>Attainment Evaluation Dashboard</h2>
+                    <p>Live calculated NBA Outcome-Based Education metrics from student continuous assessments.</p>
+                  </div>
+                </div>
+
+                <div className="attainment-dashboard-container">
+                  {/* Summary Metric Cards */}
+                  <div className="stat-cards-grid">
+                    <div className="stat-card">
+                      <span className="stat-card-label">Students Analyzed</span>
+                      <span className="stat-card-value">{calculationData.totalStudents}</span>
+                      <span className="stat-card-sub">Enrolled cohort</span>
+                    </div>
+
+                    <div className="stat-card">
+                      <span className="stat-card-label">Direct Attainment Avg</span>
+                      <span className="stat-card-value">{calculationData.summary?.avgDirectPercentage}%</span>
+                      <span className="stat-card-sub">Across all Course Outcomes</span>
+                    </div>
+
+                    <div className="stat-card">
+                      <span className="stat-card-label">Average NBA Level</span>
+                      <span className="stat-card-value">Level {calculationData.summary?.avgDirectLevel}</span>
+                      <span className="stat-card-sub">Scale 0 to 3</span>
+                    </div>
+
+                    <div className="stat-card">
+                      <span className="stat-card-label">CES Indirect Score</span>
+                      <span className="stat-card-value">{calculationData.summary?.cesScore}</span>
+                      <span className="stat-card-sub">Course Exit Survey (0-3)</span>
+                    </div>
+
+                    <div className="stat-card accent-card">
+                      <span className="stat-card-label">Final CO Attainment</span>
+                      <span className="stat-card-value">{calculationData.summary?.avgFinalCoScore}</span>
+                      <span className="stat-card-sub">90% Direct + 10% Indirect</span>
+                    </div>
+
+                    <div className="stat-card">
+                      <span className="stat-card-label">PO Attainment Average</span>
+                      <span className="stat-card-value">{calculationData.summary?.avgPoScore}</span>
+                      <span className="stat-card-sub">Across mapped outcomes</span>
+                    </div>
+                  </div>
+
+                  {/* Direct CO Attainment Table */}
+                  <div>
+                    <h3 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px", color: "var(--text)" }}>
+                      1. Course Outcome (CO) Direct Attainment Summary
+                    </h3>
+                    <div className="table-responsive-box">
+                      <table className="attainment-results-table">
+                        <thead>
+                          <tr>
+                            <th>CO Code</th>
+                            <th>Group</th>
+                            <th>Target Cutoff</th>
+                            <th>Max Scale</th>
+                            <th>Cutoff Mark</th>
+                            <th>Attempted</th>
+                            <th>≥ Cutoff</th>
+                            <th>Attainment %</th>
+                            <th>NBA Level</th>
+                            <th>Final Score</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {calculationData.coResults?.map((co) => (
+                            <tr key={co.coCode}>
+                              <td style={{ fontWeight: "700", color: "var(--text)" }}>{co.coCode}</td>
+                              <td>{co.assessmentGroup}</td>
+                              <td>{co.targetPercentage}%</td>
+                              <td>{co.maxMarks}</td>
+                              <td>{co.cutoffMarks}</td>
+                              <td>{co.studentsAttempted}</td>
+                              <td style={{ fontWeight: "600", color: "#3b82f6" }}>{co.studentsAboveCutoff}</td>
+                              <td style={{ fontWeight: "600" }}>{co.attainmentPercentage}%</td>
+                              <td>
+                                <span className={`nba-badge level-${co.directLevel}`}>
+                                  Level {co.directLevel}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: "700", color: "var(--text)" }}>{co.finalCoScore}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Course Exit Survey Box */}
+                  <div className="ces-summary-box">
+                    <h3 style={{ fontSize: "15px", fontWeight: "600", margin: "0 0 6px", color: "var(--text)" }}>
+                      2. Course Exit Survey (CES) Satisfaction Distribution
+                    </h3>
+                    <div className="ces-chips-row">
+                      <div className="ces-chip">
+                        <span>Level X (&gt; 75% Satisfied):</span>
+                        <strong>{calculationData.survey?.countX || 0} students</strong>
+                      </div>
+                      <div className="ces-chip">
+                        <span>Level Y (50% - 75% Satisfied):</span>
+                        <strong>{calculationData.survey?.countY || 0} students</strong>
+                      </div>
+                      <div className="ces-chip">
+                        <span>Level Z (&lt; 50% Satisfied):</span>
+                        <strong>{calculationData.survey?.countZ || 0} students</strong>
+                      </div>
+                      <div className="ces-chip" style={{ borderColor: "#3b82f6" }}>
+                        <span>Computed Indirect Score:</span>
+                        <strong style={{ color: "#3b82f6" }}>{calculationData.survey?.cesScore} / 3.0</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PO / PSO Attainment Grid */}
+                  <div>
+                    <h3 style={{ fontSize: "15px", fontWeight: "600", margin: "0 0 12px", color: "var(--text)" }}>
+                      3. Program Outcome (PO &amp; PSO) Correlation Attainment
+                    </h3>
+                    <div className="po-summary-grid">
+                      {["PO1", "PO2", "PO3", "PO4", "PO5", "PO6", "PO7", "PO8", "PO9", "PO10", "PO11", "PO12", "PSO1", "PSO2", "PSO3"].map((poCode) => {
+                        const item = (poCode.startsWith("PSO") ? calculationData.psoResults?.[poCode] : calculationData.poResults?.[poCode]) || {};
+                        const score = item.directPoScore || item.directPsoScore || 0;
+                        return (
+                          <div key={poCode} className="po-summary-card">
+                            <strong>{poCode}</strong>
+                            <span>{score > 0 ? score : "-"}</span>
+                            <small>{item.mappedCoCount ? `${item.mappedCoCount} COs mapped` : "Not mapped"}</small>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* =====================================
+                GENERATED REPORT & PREVIEW
             ===================================== */}
             <section
               className="portal-section generated-report-section"
               id="generated-report"
             >
               <div className="section-title">
-                <span>07</span>
-
+                <span>08</span>
                 <div>
-                  <h2>Generated Report</h2>
-                  <p>Preview and download your generated report.</p>
+                  <h2>Institutional Attainment Report</h2>
+                  <p>Formatted NBA Accreditation compliance document with header and signatures.</p>
                 </div>
               </div>
 
               {isGenerating && (
-                <p>Generating your report. Please wait...</p>
+                <p>Analyzing marksheet and preparing Word document. Please wait...</p>
               )}
 
               {reportError && (
@@ -1214,7 +1470,48 @@ function Portal() {
               )}
 
               {reportHtml && (
-                <>
+                <div className="report-preview-card">
+                  {/* Action Bar */}
+                  <div className="report-actions-bar">
+                    <div>
+                      <strong style={{ display: "block", fontSize: "14px", color: "var(--text)" }}>
+                        {selectedSubjectCode} - {selectedSubjectTitle || "Course Evaluation Report"}
+                      </strong>
+                      <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                        Generated for Academic Year {academicYear} · {attainmentType.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="report-actions-buttons">
+                      <button
+                        type="button"
+                        className="report-action-btn primary"
+                        onClick={() => {
+                          if (!reportBlob) return;
+                          const url = URL.createObjectURL(reportBlob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = `Attainx_${selectedSubjectCode || attainmentType}_NBA_Report.docx`;
+                          document.body.appendChild(link);
+                          link.click();
+                          link.remove();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        Download Word Report (.docx) <span>↓</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="report-action-btn"
+                        onClick={() => window.print()}
+                      >
+                        Print / PDF <span>🖨</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Document Page Preview */}
                   <div className="report-preview">
                     <div
                       dangerouslySetInnerHTML={{
@@ -1222,29 +1519,7 @@ function Portal() {
                       }}
                     />
                   </div>
-
-                  <button
-                    type="button"
-                    className="calculate-button"
-                    onClick={() => {
-                      if (!reportBlob) return;
-
-                      const url = URL.createObjectURL(reportBlob);
-                      const link = document.createElement("a");
-
-                      link.href = url;
-                      link.download = `Attainx_${attainmentType}_Report.docx`;
-
-                      document.body.appendChild(link);
-                      link.click();
-                      link.remove();
-
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download Word Report <span>↓</span>
-                  </button>
-                </>
+                </div>
               )}
             </section>
           </>
