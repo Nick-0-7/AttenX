@@ -57,6 +57,12 @@ function Portal() {
   const [targetCA1, setTargetCA1] = useState(60);
   const [targetCA2, setTargetCA2] = useState(60);
 
+  // Uploaded mark sheet file and validation state
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [fileStats, setFileStats] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
   // Course Outcomes
   const [cos, setCos] = useState({
     CO1: "",
@@ -368,27 +374,53 @@ function Portal() {
     setReportBlob(null);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/reports/create-report",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            attainmentType,
-            facultyName,
-            academicYear,
-            department,
-            courseCode: selectedSubjectCode,
-            courseTitle: selectedSubjectTitle,
-            targetCA1,
-            targetCA2,
-            cos,
-            mapping,
-          }),
-        }
-      );
+      let response;
+      if (uploadedFile) {
+        const formData = new FormData();
+        formData.append("file", uploadedFile);
+        formData.append("attainmentType", attainmentType);
+        formData.append("facultyName", facultyName);
+        formData.append("academicYear", academicYear);
+        formData.append("department", department);
+        formData.append("courseCode", selectedSubjectCode || "");
+        formData.append("courseTitle", selectedSubjectTitle || "");
+        formData.append("targetCA1", targetCA1);
+        formData.append("targetCA2", targetCA2);
+        formData.append("directWeight", 0.9);
+        formData.append("indirectWeight", 0.1);
+        formData.append("cos", JSON.stringify(cos));
+        formData.append("mapping", JSON.stringify(mapping));
+
+        response = await fetch(
+          "http://localhost:5000/api/reports/create-report",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+      } else {
+        response = await fetch(
+          "http://localhost:5000/api/reports/create-report",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              attainmentType,
+              facultyName,
+              academicYear,
+              department,
+              courseCode: selectedSubjectCode,
+              courseTitle: selectedSubjectTitle,
+              targetCA1,
+              targetCA2,
+              cos,
+              mapping,
+            }),
+          }
+        );
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -427,19 +459,51 @@ function Portal() {
   };
 
   // =========================================
-  // FILE UPLOAD
+  // FILE UPLOAD & VALIDATION
   // =========================================
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const extension = file.name.split(".").pop().toLowerCase();
     if (!["csv", "xlsx", "xls"].includes(extension)) {
-      alert("Only CSV and Excel files are allowed.");
+      alert("Only CSV and Excel (.xlsx, .csv) files are allowed.");
       e.target.value = "";
       return;
     }
-    console.log("Uploaded file:", file.name);
+
+    setUploadedFile(file);
+    setUploadError("");
+    setFileStats(null);
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("targetCA1", targetCA1);
+      formData.append("targetCA2", targetCA2);
+      formData.append("cos", JSON.stringify(cos));
+      formData.append("mapping", JSON.stringify(mapping));
+
+      const res = await fetch("http://localhost:5000/api/reports/calculate-live", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFileStats({
+          totalStudents: data.data?.totalStudents || 0,
+          detectedColumns: data.data?.detectedColumns || [],
+        });
+      } else {
+        setUploadError(data.message || "Failed to parse uploaded marksheet.");
+      }
+    } catch (err) {
+      console.warn("Live file preview error:", err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // =========================================
@@ -1100,20 +1164,52 @@ function Portal() {
             <section className="portal-section">
               <div className="section-title">
                 <span>06</span>
-                <h2>Import Data</h2>
+                <div>
+                  <h2>Import Data</h2>
+                  <p>Upload your student marksheet (.xlsx or .csv) to analyze attainment.</p>
+                </div>
               </div>
 
-              <label className="upload-box">
+              <label className={`upload-box ${uploadedFile ? "upload-box--done" : ""}`}>
                 <input
                   type="file"
                   accept=".csv,.xls,.xlsx"
                   onChange={handleFileUpload}
                 />
 
-                <div className="upload-arrow">↑</div>
-                <strong>Upload CSV or Excel file</strong>
-                <span>CSV · XLS · XLSX</span>
+                <div className="upload-arrow">
+                  {isUploading ? "⏳" : uploadedFile ? "✓" : "↑"}
+                </div>
+
+                {isUploading ? (
+                  <>
+                    <strong>Analyzing Marksheet...</strong>
+                    <span>Validating student rows and columns</span>
+                  </>
+                ) : uploadedFile ? (
+                  <>
+                    <strong style={{ color: "#22c55e" }}>
+                      {uploadedFile.name}
+                    </strong>
+                    <span>
+                      {(uploadedFile.size / 1024).toFixed(1)} KB
+                      {fileStats?.totalStudents ? ` • ${fileStats.totalStudents} students detected` : ""}
+                      {" • Click to replace file"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong>Upload CSV or Excel file</strong>
+                    <span>CSV · XLS · XLSX</span>
+                  </>
+                )}
               </label>
+
+              {uploadError && (
+                <p className="report-error" style={{ marginTop: "12px" }}>
+                  {uploadError}
+                </p>
+              )}
             </section>
 
             {/* =====================================

@@ -815,6 +815,16 @@ td input:focus {
   background: var(--surface-2);
 }
 
+.upload-box--done {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.upload-box--done:hover {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.08);
+}
+
 .upload-box input {
   display: none;
 }
