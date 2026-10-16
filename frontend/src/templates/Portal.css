@@ -1764,3 +1764,523 @@ td input:focus {
     align-items: flex-start;
   }
 }
+
+/* =========================================
+   4-STEP WIZARD STEPPER & NAVIGATION
+========================================= */
+
+.wizard-stepper-container {
+  margin-bottom: 45px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.wizard-stepper-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+}
+
+.wizard-step-node {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.wizard-step-node:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.wizard-step-node.active {
+  background: var(--card-selected-bg);
+  border: 1.5px solid var(--card-selected-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.wizard-step-node:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wizard-step-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+  transition: all 0.25s ease;
+}
+
+.wizard-step-node.active .wizard-step-badge {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.wizard-step-node.completed .wizard-step-badge {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #16a34a;
+}
+
+.wizard-step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wizard-step-index {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.wizard-step-node.active .wizard-step-index {
+  color: var(--text);
+}
+
+.wizard-step-node.completed .wizard-step-index {
+  color: #16a34a;
+}
+
+.wizard-step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wizard-step-status {
+  font-size: 11px;
+  color: var(--soft);
+}
+
+.wizard-step-connector {
+  width: 24px;
+  height: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.25s ease;
+}
+
+.wizard-step-connector.completed {
+  background: #16a34a;
+}
+
+/* =========================================
+   STEP 1: SKIP TEMPLATE CALLOUT CARD
+========================================= */
+
+.skip-template-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  margin-bottom: 35px;
+  background: linear-gradient(135deg, var(--card-bg) 0%, var(--surface-2) 100%);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s ease;
+}
+
+.skip-template-card.active-skip {
+  border-color: #22c55e;
+  background: var(--card-selected-bg);
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.08);
+}
+
+.skip-template-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+}
+
+.skip-template-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.skip-template-card.active-skip .skip-template-icon {
+  background: #166534;
+  color: #ffffff;
+  border-color: #22c55e;
+}
+
+.skip-template-text h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.skip-template-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--soft);
+  line-height: 1.45;
+}
+
+.skip-template-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.skip-template-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.skip-template-btn.is-skipped {
+  background: #166534;
+  color: #dcfce7;
+  border-color: #22c55e;
+}
+
+.portal.light .skip-template-btn.is-skipped {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+/* =========================================
+   STEP NAVIGATION FOOTER
+========================================= */
+
+.step-nav-footer {
+  margin-top: 55px;
+  padding: 24px 28px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+}
+
+.step-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-nav-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-progress-indicator {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.step-progress-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.step-nav-btn-prev {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.step-nav-btn-prev:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.step-nav-btn-next {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.step-nav-btn-next:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.step-nav-btn-next:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================
+   STEP VALIDATION ERROR BANNER
+========================================= */
+
+.step-validation-banner {
+  margin-top: 25px;
+  padding: 16px 20px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  color: var(--text);
+}
+
+.step-validation-icon {
+  font-size: 18px;
+  color: #ef4444;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.step-validation-content {
+  flex: 1;
+}
+
+.step-validation-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.step-validation-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--soft);
+}
+
+.step-validation-list li {
+  margin-bottom: 3px;
+}
+
+/* =========================================
+   STEP 4 REVIEW SUMMARY CARD
+========================================= */
+
+.step-review-summary-card {
+  margin-bottom: 40px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.step-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.step-review-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #166534;
+  color: #dcfce7;
+}
+
+.portal.light .step-review-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.step-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.step-review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.step-review-item label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.step-review-item strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.required-field-star {
+  color: #ef4444;
+  margin-left: 3px;
+}
+
+.input-has-error {
+  border-color: #ef4444 !important;
+}
+
+.menu-step-badge {
+  font-size: 11px;
+  margin-left: auto;
+  color: #22c55e;
+  font-weight: 700;
+}
+
+/* Responsive adjustment for stepper */
+@media (max-width: 900px) {
+  .wizard-stepper-track {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wizard-step-connector {
+    display: none;
+  }
+
+  .step-nav-footer {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .step-nav-left,
+  .step-nav-right {
+    justify-content: center;
+  }
+
+  .skip-template-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .skip-template-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* =========================================
+   SVG ICON UTILITIES & ANIMATIONS
+========================================= */
+
+@keyframes icon-spin-anim {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-spin {
+  animation: icon-spin-anim 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.portal svg {
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.menu-step-badge svg {
+  color: #22c55e;
+}
+
+.curriculum-badge-icon svg {
+  color: #22c55e;
+}
+
+.download-toast svg {
+  margin-right: 6px;
+}
