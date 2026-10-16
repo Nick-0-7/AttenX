@@ -1107,12 +1107,19 @@ td input:focus {
   margin: 18px 0;
   font-size: 12.5px;
   background: #ffffff;
+  page-break-inside: auto;
+  break-inside: auto;
 }
 
 .report-preview table,
 .report-preview th,
 .report-preview td {
   border: 1px solid #94a3b8;
+}
+
+.report-preview tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
 }
 
 .report-preview th,
@@ -1129,20 +1136,128 @@ td input:focus {
   text-align: center;
 }
 
-.report-preview td {
-  text-align: center;
+/* 1. Institutional Letterhead Table: Borderless with centered text and clean logo */
+.report-preview table.report-letterhead-table,
+.report-preview table.report-letterhead-table td,
+.report-preview table.report-letterhead-table tr {
+  border: none !important;
+  background: transparent !important;
+  padding: 3px 6px !important;
 }
 
-/* For student names and CO statements where the 2nd column is descriptive text */
-.report-preview table td:nth-child(2):not(:last-child) {
-  text-align: left;
-  padding-left: 12px;
+.report-preview table.report-letterhead-table img {
+  max-height: 75px !important;
+  width: auto !important;
+  object-fit: contain !important;
+  display: block !important;
+  margin: 0 auto !important;
 }
 
-/* In 2-column key-value metadata tables, left-align cells */
-.report-preview table:has(tr td:nth-child(2):last-child) td {
-  text-align: left;
-  padding-left: 10px;
+.report-preview table.report-letterhead-table p {
+  text-align: center !important;
+  margin: 2px 0 !important;
+}
+
+/* 2. Signature Blocks: Borderless with columns aligned Left, Center, Right */
+.report-preview table.report-signature-table,
+.report-preview table.report-signature-table td,
+.report-preview table.report-signature-table tr {
+  border: none !important;
+  background: transparent !important;
+  padding-top: 30px !important;
+  padding-bottom: 8px !important;
+  vertical-align: bottom !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.report-preview table.report-signature-table td:first-child {
+  text-align: left !important;
+}
+
+.report-preview table.report-signature-table td:nth-child(2) {
+  text-align: center !important;
+}
+
+.report-preview table.report-signature-table td:last-child {
+  text-align: right !important;
+}
+
+/* 3. 15-Column CO-PO & PSO Mapping Matrix: Fixed proportions and strictly centered values */
+.report-preview table.report-matrix-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.report-preview table.report-matrix-table td,
+.report-preview table.report-matrix-table th {
+  font-size: 10.5px !important;
+  padding: 6px 2px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.report-preview table.report-matrix-table tr:first-child td {
+  background: #f1f5f9 !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+
+.report-preview table.report-matrix-table tr td:first-child {
+  width: 14% !important;
+  font-weight: 700 !important;
+  background: #f8fafc !important;
+  text-align: center !important;
+}
+
+/* 4. CO Statements Table: 14% bold code and 86% clean left-aligned text */
+.report-preview table.report-co-statements-table tr td:first-child {
+  width: 14% !important;
+  text-align: center !important;
+  font-weight: 700 !important;
+  background: #f8fafc !important;
+  vertical-align: top !important;
+  padding: 8px 10px !important;
+}
+
+.report-preview table.report-co-statements-table tr td:nth-child(2) {
+  width: 86% !important;
+  text-align: left !important;
+  vertical-align: top !important;
+  padding: 8px 14px !important;
+  line-height: 1.5 !important;
+}
+
+/* 5. Course Metadata Table: Subtle borders and left-aligned labels */
+.report-preview table.report-metadata-table {
+  margin: 12px 0 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.report-preview table.report-metadata-table td {
+  border: 1px solid #cbd5e1 !important;
+  text-align: left !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+}
+
+/* 6. Standard Attainment Data Table: Centered data cells with left-aligned metric label */
+.report-preview table.report-data-table tr:first-child td {
+  background: #f1f5f9 !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+}
+
+.report-preview table.report-data-table td {
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 7px 10px !important;
+}
+
+.report-preview table.report-data-table tr td:first-child:not([colspan]) {
+  text-align: left !important;
+  padding-left: 12px !important;
 }
 
 .report-preview table p {
@@ -1150,6 +1265,294 @@ td input:focus {
   padding: 0 !important;
   color: inherit !important;
   line-height: 1.35;
+}
+
+/* =========================================
+   DEDICATED A4 PDF EXPORT STYLING
+========================================= */
+.html2pdf__page-break,
+.page-break-section {
+  page-break-before: always !important;
+  break-before: page !important;
+  display: block !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.report-preview.exporting-pdf,
+.attainx-pdf-print-container {
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-family: 'Times New Roman', Times, serif !important;
+  font-size: 8.5pt !important;
+  line-height: 1.25 !important;
+  width: 720px !important;
+  max-width: 720px !important;
+  min-width: 720px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.report-preview.exporting-pdf h1,
+.report-preview.exporting-pdf h2,
+.report-preview.exporting-pdf h3,
+.report-preview.exporting-pdf h4,
+.attainx-pdf-print-container h1,
+.attainx-pdf-print-container h2,
+.attainx-pdf-print-container h3,
+.attainx-pdf-print-container h4 {
+  text-align: center !important;
+  color: #000000 !important;
+  margin: 6px 0 3px !important;
+  font-weight: 700 !important;
+  page-break-after: avoid !important;
+  break-after: avoid !important;
+}
+
+.report-preview.exporting-pdf h1,
+.attainx-pdf-print-container h1 {
+  font-size: 12pt !important;
+}
+
+.report-preview.exporting-pdf h2,
+.attainx-pdf-print-container h2 {
+  font-size: 10.5pt !important;
+}
+
+.report-preview.exporting-pdf h3,
+.attainx-pdf-print-container h3 {
+  font-size: 9.5pt !important;
+}
+
+.report-preview.exporting-pdf p,
+.attainx-pdf-print-container p {
+  margin: 2px 0 !important;
+  line-height: 1.25 !important;
+  color: #000000 !important;
+}
+
+.report-preview.exporting-pdf table,
+.attainx-pdf-print-container table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 5px 0 !important;
+  font-size: 8pt !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.report-preview.exporting-pdf tr,
+.attainx-pdf-print-container tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.report-preview.exporting-pdf th,
+.report-preview.exporting-pdf td,
+.attainx-pdf-print-container th,
+.attainx-pdf-print-container td {
+  border: 1px solid #000000 !important;
+  padding: 3px 4px !important;
+  font-size: 8pt !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  color: #000000 !important;
+}
+
+.report-preview.exporting-pdf th,
+.attainx-pdf-print-container th {
+  background: #f1f5f9 !important;
+  font-weight: 700 !important;
+}
+
+/* 1. Letterhead table in PDF */
+.report-preview.exporting-pdf table.report-letterhead-table,
+.report-preview.exporting-pdf table.report-letterhead-table td,
+.report-preview.exporting-pdf table.report-letterhead-table tr,
+.attainx-pdf-print-container table.report-letterhead-table,
+.attainx-pdf-print-container table.report-letterhead-table td,
+.attainx-pdf-print-container table.report-letterhead-table tr {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 2px !important;
+  text-align: center !important;
+}
+
+.report-preview.exporting-pdf img,
+.attainx-pdf-print-container img {
+  max-height: 48px !important;
+  width: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+.report-preview.exporting-pdf table.report-letterhead-table p,
+.attainx-pdf-print-container table.report-letterhead-table p {
+  text-align: center !important;
+  margin: 1px 0 !important;
+  font-size: 8.5pt !important;
+  line-height: 1.2 !important;
+}
+
+/* 2. Signature table in PDF */
+.report-preview.exporting-pdf table.report-signature-table,
+.report-preview.exporting-pdf table.report-signature-table td,
+.report-preview.exporting-pdf table.report-signature-table tr,
+.attainx-pdf-print-container table.report-signature-table,
+.attainx-pdf-print-container table.report-signature-table td,
+.attainx-pdf-print-container table.report-signature-table tr {
+  border: none !important;
+  background: transparent !important;
+  padding-top: 20px !important;
+  padding-bottom: 2px !important;
+  vertical-align: bottom !important;
+  font-weight: bold !important;
+  font-size: 8.5pt !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.report-preview.exporting-pdf table.report-signature-table td:first-child,
+.attainx-pdf-print-container table.report-signature-table td:first-child {
+  text-align: left !important;
+}
+
+.report-preview.exporting-pdf table.report-signature-table td:nth-child(2),
+.attainx-pdf-print-container table.report-signature-table td:nth-child(2) {
+  text-align: center !important;
+}
+
+.report-preview.exporting-pdf table.report-signature-table td:last-child,
+.attainx-pdf-print-container table.report-signature-table td:last-child {
+  text-align: right !important;
+}
+
+/* 3. 15-Column Matrix table in PDF */
+.report-preview.exporting-pdf table.report-matrix-table,
+.attainx-pdf-print-container table.report-matrix-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  margin: 5px 0 !important;
+}
+
+.report-preview.exporting-pdf table.report-matrix-table th,
+.report-preview.exporting-pdf table.report-matrix-table td,
+.attainx-pdf-print-container table.report-matrix-table th,
+.attainx-pdf-print-container table.report-matrix-table td {
+  font-size: 7.5pt !important;
+  padding: 2.5px 1px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+}
+
+.report-preview.exporting-pdf table.report-matrix-table tr:first-child td,
+.attainx-pdf-print-container table.report-matrix-table tr:first-child td {
+  background: #f1f5f9 !important;
+  font-weight: bold !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  font-size: 7pt !important;
+}
+
+.report-preview.exporting-pdf table.report-matrix-table tr td:first-child,
+.attainx-pdf-print-container table.report-matrix-table tr td:first-child {
+  width: 14% !important;
+  font-weight: bold !important;
+  background: #f8fafc !important;
+  text-align: center !important;
+  font-size: 7.5pt !important;
+}
+
+/* 4. Course Exit Survey (CES) table in PDF */
+.report-preview.exporting-pdf table.report-ces-table,
+.attainx-pdf-print-container table.report-ces-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  margin: 5px 0 !important;
+}
+
+.report-preview.exporting-pdf table.report-ces-table td,
+.attainx-pdf-print-container table.report-ces-table td {
+  padding: 3px 3px !important;
+  font-size: 8pt !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.report-preview.exporting-pdf table.report-ces-table tr:first-child td,
+.attainx-pdf-print-container table.report-ces-table tr:first-child td {
+  background: #f1f5f9 !important;
+  font-weight: bold !important;
+}
+
+/* 5. CO Statements in PDF */
+.report-preview.exporting-pdf table.report-co-statements-table tr td:first-child,
+.attainx-pdf-print-container table.report-co-statements-table tr td:first-child {
+  width: 12% !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  background: #f8fafc !important;
+  vertical-align: top !important;
+  padding: 3px 4px !important;
+  font-size: 8.5pt !important;
+}
+
+.report-preview.exporting-pdf table.report-co-statements-table tr td:nth-child(2),
+.attainx-pdf-print-container table.report-co-statements-table tr td:nth-child(2) {
+  width: 88% !important;
+  text-align: left !important;
+  vertical-align: top !important;
+  padding: 3px 6px !important;
+  line-height: 1.25 !important;
+  font-size: 8.5pt !important;
+}
+
+/* 6. Metadata in PDF */
+.report-preview.exporting-pdf table.report-metadata-table td,
+.attainx-pdf-print-container table.report-metadata-table td {
+  text-align: left !important;
+  padding: 3px 6px !important;
+  font-size: 8.5pt !important;
+}
+
+/* 7. Data tables in PDF */
+.report-preview.exporting-pdf table.report-data-table tr:first-child td,
+.attainx-pdf-print-container table.report-data-table tr:first-child td {
+  background: #f1f5f9 !important;
+  font-weight: bold !important;
+  text-align: center !important;
+}
+
+.report-preview.exporting-pdf table.report-data-table td,
+.attainx-pdf-print-container table.report-data-table td {
+  text-align: center !important;
+  vertical-align: middle !important;
+  font-size: 8pt !important;
+  padding: 3px 4px !important;
+}
+
+.report-preview.exporting-pdf table.report-data-table tr td:first-child:not([colspan]),
+.attainx-pdf-print-container table.report-data-table tr td:first-child:not([colspan]) {
+  text-align: left !important;
+  padding-left: 6px !important;
+  font-size: 8pt !important;
+}
+
+.report-preview.exporting-pdf table p,
+.attainx-pdf-print-container table p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2 !important;
 }
 
 /* Download Action Button Group & Modal */

@@ -10,7 +10,9 @@ const templates = {
   "lab-pr-or": "Attainx_Laboratory_PR_OR_Template.docx",
   lab: "Attainx_Laboratory_Template.docx",
   "laboratory-pr-or": "Attainx_Laboratory_PR_OR_Template.docx",
-  "audit-course": "Attainx_Theory_Template.docx",
+  "audit-course": "Attainx_Audit_Course_Template.docx",
+  audit: "Attainx_Audit_Course_Template.docx",
+  "audit course": "Attainx_Audit_Course_Template.docx",
 };
 
 /**
@@ -172,25 +174,29 @@ function generateTemplateReport(formData = {}) {
 
     coResults.forEach((co, idx) => {
       const coNum = idx + 1;
-      const pct = typeof co.overallAttainmentPercent === "number"
-        ? `${Math.round(co.overallAttainmentPercent)}%`
-        : `${Math.round(co.directPercent || 75)}%`;
+      const attainmentPct = typeof co.attainmentPercentage === "number"
+        ? Math.round(co.attainmentPercentage)
+        : (typeof co.overallAttainmentPercent === "number"
+          ? Math.round(co.overallAttainmentPercent)
+          : (typeof co.directPercent === "number" ? Math.round(co.directPercent) : 75));
 
-      data[`FINAL_CO${coNum}_ATTAINMENT`] = pct;
+      const level = co.directLevel !== undefined ? co.directLevel : 3;
+
+      data[`FINAL_CO${coNum}_ATTAINMENT`] = `${attainmentPct}%`;
 
       // Assessment specifics
       if (coNum <= 3) {
-        data[`CA1_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${Math.round(co.directPercent || 75)}%`;
-        data[`CA1_ATTAINMENTLEVEL_CO${coNum}`] = String(co.directLevel || 3);
-        data[`MSE_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${Math.round((co.directPercent || 75) - 2)}%`;
-        data[`MSE_ATTAINMENTLEVEL_CO${coNum}`] = String(co.directLevel || 2.5);
+        data[`CA1_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${attainmentPct}%`;
+        data[`CA1_ATTAINMENTLEVEL_CO${coNum}`] = String(level);
+        data[`MSE_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${Math.max(0, attainmentPct - 2)}%`;
+        data[`MSE_ATTAINMENTLEVEL_CO${coNum}`] = String(level);
 
         // Lab specifics
-        data[`CA1_CA2_CO${coNum}_OFSTUDENTSSECUREMORETHANSETLEVEL`] = `${Math.round(co.directPercent || 80)}%`;
-        data[`CA1_CA2_CO${coNum}_ATTAINMENT`] = String(co.directLevel || 3);
+        data[`CA1_CA2_CO${coNum}_OFSTUDENTSSECUREMORETHANSETLEVEL`] = `${attainmentPct}%`;
+        data[`CA1_CA2_CO${coNum}_ATTAINMENT`] = String(level);
       } else {
-        data[`CA2_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${Math.round(co.directPercent || 78)}%`;
-        data[`CA2_ATTAINMENTLEVEL_CO${coNum}`] = String(co.directLevel || 3);
+        data[`CA2_STUDENTSSCORINGMORETHAN50MARKS_CO${coNum}`] = `${attainmentPct}%`;
+        data[`CA2_ATTAINMENTLEVEL_CO${coNum}`] = String(level);
       }
     });
 

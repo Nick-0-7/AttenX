@@ -6,6 +6,204 @@ import { curriculumSubjects } from "../data/curriculumData";
 import "../templates/Portal.css";
 import attainxLogo from "../assets/attainx-logo.png";
 
+/**
+ * Classifies tables and structural elements from Mammoth HTML so that
+ * institutional letterheads, signature blocks, 15-column matrices,
+ * and assessment tables maintain pristine alignments in both preview and PDF export.
+ */
+const MATRIX_COLGROUP = `<colgroup>
+  <col style="width: 14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+  <col style="width: 6.14% !important;">
+</colgroup>`;
+
+const CES_COLGROUP = `<colgroup>
+  <col style="width: 12% !important;">
+  <col style="width: 13% !important;">
+  <col style="width: 13% !important;">
+  <col style="width: 13% !important;">
+  <col style="width: 49% !important;">
+</colgroup>`;
+
+/**
+ * Classifies tables and structural elements from Mammoth HTML so that
+ * institutional letterheads, signature blocks, 15-column matrices,
+ * and assessment tables maintain pristine alignments in both preview and PDF export.
+ */
+function formatReportHtml(rawHtml) {
+  if (!rawHtml) return "";
+
+  // 1. Remove empty nested artifact tables created by Mammoth from Word shapes
+  let processed = rawHtml.replace(/<table>\s*<tr>\s*<td>\s*<\/td>\s*<\/tr>\s*<\/table>/gi, "");
+
+  // 2. Classify tables with semantic classes and inject precise column specifications
+  processed = processed.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+    const text = tableHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+    // College Letterhead table (contains logo or college name)
+    if (
+      tableHtml.includes("<img") ||
+      text.includes("Shri Shamrao") ||
+      text.includes("COLLEGE OF ENGINEERING") ||
+      text.includes("Autonomous Institute")
+    ) {
+      return tableHtml.replace("<table", '<table class="report-letterhead-table"');
+    }
+
+    // Signature table (contains Prepared By / Verified By / Head of Department)
+    if (
+      text.includes("Prepared By") &&
+      (text.includes("Verified By") || text.includes("Head of Department"))
+    ) {
+      return tableHtml.replace("<table", '<table class="report-signature-table"');
+    }
+
+    // Course Details / Metadata table
+    if (text.includes("Course:-") || text.includes("Course Code:-")) {
+      return tableHtml.replace("<table", '<table class="report-metadata-table"');
+    }
+
+    // 15-column CO-PO / PSO mapping matrix
+    if (
+      text.includes("PO1") &&
+      text.includes("PO2") &&
+      (text.includes("PSO") || text.includes("PO 10") || text.includes("PO 11"))
+    ) {
+      return tableHtml
+        .replace("<table", '<table class="report-matrix-table"')
+        .replace(/<table[^>]*>/, `$&${MATRIX_COLGROUP}`);
+    }
+
+    // Course Exit Survey (CES) table
+    if (text.includes(">70%") || text.includes("55-70%") || text.includes("Attainment out of 3")) {
+      return tableHtml
+        .replace("<table", '<table class="report-ces-table report-data-table"')
+        .replace(/<table[^>]*>/, `$&${CES_COLGROUP}`);
+    }
+
+    // CO Statements table (CO1 -, CO2 -, etc.)
+    if (/CO[1-6]\s*-/.test(text)) {
+      return tableHtml.replace("<table", '<table class="report-co-statements-table"');
+    }
+
+    // Default to standard data table
+    return tableHtml.replace("<table", '<table class="report-data-table"');
+  });
+
+  // 3. Insert clean A4 page breaks ONLY at logical section boundaries:
+  // Break 1: Directly after the first signature table (Page 1 end)
+  let sigIndex = 0;
+  processed = processed.replace(/<table class="report-signature-table"[\s\S]*?<\/table>/gi, (match) => {
+    sigIndex++;
+    if (sigIndex === 1) {
+      return match + '<div class="html2pdf__page-break page-break-section"></div>';
+    }
+    return match;
+  });
+
+  // Break 2: Directly before D] Attainment from End Semester Exam (ESE) (Page 2 end)
+  processed = processed.replace(
+    /(<p><strong>\s*D\]\s*Attainment from End Semester Exam)/i,
+    '<div class="html2pdf__page-break page-break-section"></div>$1'
+  );
+
+  // Break 3: Directly before Attainment of CO\'s with PO\'s (Final Matrix) (Page 3 end)
+  processed = processed.replace(
+    /(<p><strong>\s*Attainment of CO(?:’|\')s with PO(?:’|\')s)/i,
+    '<div class="html2pdf__page-break page-break-section"></div>$1'
+  );
+
+  return processed;
+}
+
+/**
+ * Ensures all table elements in a rendered DOM node have the proper semantic classes, colgroups, and page breaks
+ */
+function ensureTableClasses(container) {
+  if (!container) return;
+  const tables = container.querySelectorAll("table");
+  let sigIndex = 0;
+
+  tables.forEach((table) => {
+    const text = table.textContent || "";
+    const hasImg = table.querySelector("img");
+
+    if (
+      hasImg ||
+      text.includes("Shri Shamrao") ||
+      text.includes("COLLEGE OF ENGINEERING") ||
+      text.includes("Autonomous Institute")
+    ) {
+      table.classList.add("report-letterhead-table");
+    } else if (
+      text.includes("Prepared By") &&
+      (text.includes("Verified By") || text.includes("Head of Department"))
+    ) {
+      table.classList.add("report-signature-table");
+      sigIndex++;
+      if (sigIndex === 1 && !table.nextElementSibling?.classList.contains("html2pdf__page-break")) {
+        const breakEl = document.createElement("div");
+        breakEl.className = "html2pdf__page-break page-break-section";
+        table.parentNode.insertBefore(breakEl, table.nextSibling);
+      }
+    } else if (text.includes("Course:-") || text.includes("Course Code:-")) {
+      table.classList.add("report-metadata-table");
+    } else if (
+      text.includes("PO1") &&
+      text.includes("PO2") &&
+      (text.includes("PSO") || text.includes("PO 10") || text.includes("PO 11"))
+    ) {
+      table.classList.add("report-matrix-table");
+      if (!table.querySelector("colgroup")) {
+        table.insertAdjacentHTML("afterbegin", MATRIX_COLGROUP);
+      }
+    } else if (text.includes(">70%") || text.includes("55-70%") || text.includes("Attainment out of 3")) {
+      table.classList.add("report-ces-table", "report-data-table");
+      if (!table.querySelector("colgroup")) {
+        table.insertAdjacentHTML("afterbegin", CES_COLGROUP);
+      }
+    } else if (/CO[1-6]\s*-/.test(text)) {
+      table.classList.add("report-co-statements-table");
+    } else {
+      table.classList.add("report-data-table");
+    }
+  });
+
+  // Ensure pagebreak elements exist before ESE and Final Matrix
+  const paragraphs = container.querySelectorAll("p");
+  paragraphs.forEach((p) => {
+    const text = p.textContent || "";
+    if (
+      text.includes("Attainment from End Semester Exam") &&
+      !p.previousElementSibling?.classList.contains("html2pdf__page-break")
+    ) {
+      const breakEl = document.createElement("div");
+      breakEl.className = "html2pdf__page-break page-break-section";
+      p.parentNode.insertBefore(breakEl, p);
+    } else if (
+      text.includes("Attainment of CO") &&
+      text.includes("with PO") &&
+      !p.previousElementSibling?.classList.contains("html2pdf__page-break")
+    ) {
+      const breakEl = document.createElement("div");
+      breakEl.className = "html2pdf__page-break page-break-section";
+      p.parentNode.insertBefore(breakEl, p);
+    }
+  });
+}
+
 function Portal() {
   const navigate = useNavigate();
 
@@ -439,8 +637,9 @@ function Portal() {
         arrayBuffer,
       });
 
+      const formattedHtml = formatReportHtml(result.value);
       setReportBlob(blob);
-      setReportHtml(result.value);
+      setReportHtml(formattedHtml);
 
       setTimeout(() => {
         document
@@ -479,29 +678,53 @@ function Portal() {
   };
 
   const downloadPdfReport = async () => {
-    if (!reportPreviewRef.current && !reportHtml) return;
+    const element = reportPreviewRef.current || document.querySelector(".report-preview");
+    if (!element) {
+      alert("No report preview found to export. Please calculate attainment first.");
+      return;
+    }
     setIsExportingPdf(true);
     try {
+      // Ensure all tables inside the preview element have semantic alignment classes
+      ensureTableClasses(element);
+
+      // Temporarily apply clean A4 dimensions and print styles to visible element
+      element.classList.add("exporting-pdf");
+
+      // Allow browser to calculate layout & apply colgroups before capture
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
       const html2pdfModule = await import("html2pdf.js");
       const html2pdf = html2pdfModule.default || html2pdfModule;
-      const element = reportPreviewRef.current || document.querySelector(".report-preview");
-      if (!element) throw new Error("Report preview element not found");
 
       const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+
       const opt = {
-        margin: [10, 10, 10, 10],
+        margin: [6, 8, 6, 8], // 6mm top/bottom, 8mm left/right margins for exact A4 fit
         filename: `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true,
+          scrollY: 0,
+          scrollX: 0,
+          windowWidth: 720,
+        },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        pagebreak: {
+          mode: ["css", "legacy"],
+          before: ".html2pdf__page-break",
+          avoid: ["tr", ".report-signature-table", "h1", "h2", "h3"],
+        },
       };
 
       await html2pdf().set(opt).from(element).save();
       setShowDownloadModal(false);
     } catch (err) {
       console.error("PDF generation via html2pdf failed, falling back to print dialog:", err);
-      // Fallback: styled print window
+      // Fallback: styled print window with identical print CSS
       const printWindow = window.open("", "_blank");
       if (printWindow) {
         printWindow.document.write(`
@@ -510,19 +733,102 @@ function Portal() {
             <head>
               <title>Attainx Report - ${selectedSubjectTitle || "Course Report"}</title>
               <style>
-                @page { size: A4 portrait; margin: 15mm; }
-                body { font-family: 'Times New Roman', Times, serif; color: #000; padding: 20px; }
-                h1, h2, h3, h4 { text-align: center; margin: 8px 0; }
-                table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11pt; }
-                th, td { border: 1px solid #333; padding: 6px 8px; }
-                th { background: #f0f0f0; text-align: center; font-weight: bold; }
-                td { text-align: center; }
-                td:first-child, td:nth-child(2) { text-align: left; }
-                p { margin: 4px 0; }
+                @page { size: A4 portrait; margin: 12mm; }
+                body {
+                  font-family: 'Times New Roman', Times, serif;
+                  color: #0f172a;
+                  background: #ffffff;
+                  padding: 0;
+                  margin: 0;
+                  font-size: 11pt;
+                  line-height: 1.4;
+                }
+                h1, h2, h3, h4 { text-align: center; margin: 8px 0; color: #0f172a; }
+                p { margin: 4px 0; line-height: 1.4; }
+                img { max-height: 70px; display: block; margin: 0 auto; }
+                table {
+                  width: 100% !important;
+                  border-collapse: collapse !important;
+                  margin: 10px 0 !important;
+                  page-break-inside: auto;
+                  break-inside: auto;
+                }
+                tr {
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
+                }
+                th, td {
+                  border: 1px solid #334155;
+                  padding: 5px 7px;
+                  vertical-align: middle;
+                  text-align: center;
+                }
+                .report-letterhead-table,
+                .report-letterhead-table td,
+                .report-letterhead-table tr {
+                  border: none !important;
+                  background: transparent !important;
+                  text-align: center !important;
+                  padding: 2px 4px !important;
+                }
+                .report-signature-table,
+                .report-signature-table td,
+                .report-signature-table tr {
+                  border: none !important;
+                  background: transparent !important;
+                  padding-top: 30px !important;
+                  padding-bottom: 8px !important;
+                  vertical-align: bottom !important;
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
+                }
+                .report-signature-table td:first-child { text-align: left !important; }
+                .report-signature-table td:nth-child(2) { text-align: center !important; }
+                .report-signature-table td:last-child { text-align: right !important; }
+                .report-matrix-table { table-layout: fixed !important; }
+                .report-matrix-table td {
+                  font-size: 8.5pt !important;
+                  padding: 4px 1px !important;
+                  text-align: center !important;
+                  white-space: nowrap !important;
+                }
+                .report-matrix-table tr td:first-child {
+                  width: 16% !important;
+                  font-weight: bold;
+                  background: #f5f5f5 !important;
+                  white-space: normal !important;
+                }
+                .report-matrix-table tr:first-child td {
+                  background: #f0f0f0 !important;
+                  font-weight: bold;
+                }
+                .report-co-statements-table tr td:first-child {
+                  width: 14% !important;
+                  font-weight: bold;
+                  text-align: center !important;
+                  vertical-align: top !important;
+                }
+                .report-co-statements-table tr td:nth-child(2) {
+                  width: 86% !important;
+                  text-align: left !important;
+                  vertical-align: top !important;
+                }
+                .report-data-table tr:first-child td {
+                  background: #f0f0f0 !important;
+                  font-weight: bold;
+                }
+                .report-data-table tr td:first-child:not([colspan]) {
+                  text-align: left !important;
+                  padding-left: 8px !important;
+                }
+                .report-metadata-table td {
+                  text-align: left !important;
+                  padding: 5px 8px !important;
+                }
               </style>
             </head>
             <body>
-              ${reportPreviewRef.current ? reportPreviewRef.current.innerHTML : reportHtml}
+              ${element.innerHTML}
             </body>
           </html>
         `);
@@ -535,6 +841,9 @@ function Portal() {
       }
       setShowDownloadModal(false);
     } finally {
+      if (element) {
+        element.classList.remove("exporting-pdf");
+      }
       setIsExportingPdf(false);
     }
   };
