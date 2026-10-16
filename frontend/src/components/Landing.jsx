@@ -2,41 +2,47 @@ import React, { useEffect, useState } from "react";
 import "../templates/Landing.css";
 import { useNavigate } from "react-router-dom";
 import attainxLogo from "../assets/attainx-logo.png";
+import CrestColumns from "./backgrounds/effects/crest-columns";
+import TickerDelta from "./TickerDelta";
+import { useLenis } from "../context/SmoothScroll";
 
 const Landing = () => {
   const [scrollY, setScrollY] = useState(0);
   const navigate = useNavigate();
+  const { lenis, scrollTo } = useLenis();
 
   /* =========================================
-     SCROLL POSITION
+     SCROLL POSITION & PARALLAX (LENIS SYNC)
   ========================================= */
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
+    if (lenis) {
+      const handleLenisScroll = ({ scroll }) => {
+        setScrollY(scroll);
+      };
+      lenis.on("scroll", handleLenisScroll);
 
-    window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+      return () => {
+        lenis.off("scroll", handleLenisScroll);
+      };
+    } else {
+      const handleScroll = () => {
+        setScrollY(window.scrollY);
+      };
+      window.addEventListener("scroll", handleScroll, { passive: true });
+      return () => {
+        window.removeEventListener("scroll", handleScroll);
+      };
+    }
+  }, [lenis]);
 
 
   /* =========================================
-     SECTION NAVIGATION
+     SECTION NAVIGATION (SMOOTH LENIS GLIDE)
   ========================================= */
 
   const scrollToSection = (id) => {
-    const section = document.getElementById(id);
-
-    if (!section) return;
-
-    section.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    scrollTo(`#${id}`, { offset: -30, duration: 1.2 });
   };
 
 
@@ -68,14 +74,14 @@ const Landing = () => {
 
       <nav className="navbar">
 
-       <div className="logo">
-  <img
-    src={attainxLogo}
-    alt="Attainx"
-  />
+        <div className="logo">
+          <img
+            src={attainxLogo}
+            alt="Attainx"
+          />
 
-  <span>Attainx</span>
-</div>
+          <span>Attainx</span>
+        </div>
 
 
         <div className="nav-links">
@@ -117,6 +123,18 @@ const Landing = () => {
       ===================================== */}
 
       <section className="hero landing-section">
+        {/* Crest Columns Background - Exclusively for Hero section */}
+        <CrestColumns
+          color="#dde3ec"
+          glowColor="rgba(255, 255, 255, 0.9)"
+          secondaryColor="#475569"
+          lineColor="rgba(255, 255, 255, 0.06)"
+          speed={0.2}
+          columnCount={22}
+          interactive={true}
+          glowIntensity={1.0}
+          className="hero-crest-columns"
+        />
 
         <div className="hero-top">
 
@@ -229,49 +247,86 @@ const Landing = () => {
           02 / 04
         </div>
 
+        <div className="about-layout">
+          <div className="about-content-col">
+            <div className="section-content reveal-on-scroll">
 
-        <div className="section-content">
+              <p className="section-eyebrow">
+                ABOUT THE SYSTEM
+              </p>
 
-          <p className="section-eyebrow">
-            ABOUT THE SYSTEM
-          </p>
+              <h2>
+                From raw
+                <br />
+                <span>data to insight.</span>
+              </h2>
 
+              <p className="section-description">
+                Student Attainment System simplifies the
+                process of measuring course outcomes by
+                bringing assessment data, CO mapping and
+                attainment analysis into one structured
+                workflow.
+              </p>
 
-          <h2>
-            From raw
-            <br />
-            <span>data to insight.</span>
-          </h2>
+            </div>
 
+            <div className="about-meta reveal-stagger">
 
-          <p className="section-description">
-            Student Attainment System simplifies the
-            process of measuring course outcomes by
-            bringing assessment data, CO mapping and
-            attainment analysis into one structured
-            workflow.
-          </p>
+              <div>
+                <span>01</span>
+                <p>Assessment Data</p>
+              </div>
 
-        </div>
+              <div>
+                <span>02</span>
+                <p>Outcome Mapping</p>
+              </div>
 
+              <div>
+                <span>03</span>
+                <p>Attainment Analysis</p>
+              </div>
 
-        <div className="about-meta">
-
-          <div>
-            <span>01</span>
-            <p>Assessment Data</p>
+            </div>
           </div>
 
-          <div>
-            <span>02</span>
-            <p>Outcome Mapping</p>
+          <div className="about-visual-col reveal-on-scroll">
+            <div className="ticker-delta-wrapper">
+              <TickerDelta
+                background="transparent"
+                direction="cw"
+                speed={0.6}
+                hoverSpeed={2.0}
+                thickness={4.8}
+                roundness={2.5}
+                shadow={0}
+                scale={155}
+                drag={true}
+                leftFace={{
+                  text: "STUDENT ATTAINMENT ·",
+                  size: 6.5,
+                  weight: "bold",
+                  fill: "#ffffff",
+                  ink: "#111111",
+                }}
+                topFace={{
+                  text: "STUDENT ATTAINMENT ·",
+                  size: 5,
+                  weight: "regular",
+                  fill: "#1f1f23",
+                  ink: "#ffffff",
+                }}
+                rightFace={{
+                  text: "STUDENT ATTAINMENT ·",
+                  size: 4,
+                  weight: "light",
+                  fill: "#52525b",
+                  ink: "#f4f4f6",
+                }}
+              />
+            </div>
           </div>
-
-          <div>
-            <span>03</span>
-            <p>Attainment Analysis</p>
-          </div>
-
         </div>
 
       </section>
@@ -291,7 +346,7 @@ const Landing = () => {
         </div>
 
 
-        <div className="section-content">
+        <div className="section-content reveal-on-scroll">
 
           <p className="section-eyebrow">
             SYSTEM CAPABILITIES
@@ -307,7 +362,7 @@ const Landing = () => {
         </div>
 
 
-        <div className="feature-list">
+        <div className="feature-list reveal-stagger">
 
           <div className="feature-item">
 
@@ -399,7 +454,7 @@ const Landing = () => {
         </div>
 
 
-        <div className="section-content">
+        <div className="section-content reveal-on-scroll">
 
           <p className="section-eyebrow">
             HOW IT WORKS
@@ -415,7 +470,7 @@ const Landing = () => {
         </div>
 
 
-        <div className="process-list">
+        <div className="process-list reveal-stagger">
 
           <div className="process-item">
 
@@ -484,51 +539,75 @@ const Landing = () => {
     FOOTER
 ===================================== */}
 
-<footer className="landing-footer">
+      <footer className="landing-footer">
 
-  <div className="footer-top">
+        <div className="footer-top reveal-on-scroll">
 
-    <div>
-      <span className="footer-label">STUDENT ATTAINMENT SYSTEM</span>
+          <div>
+            <span className="footer-label">STUDENT ATTAINMENT SYSTEM</span>
 
-      <p>
-        Turning academic data into meaningful insight.
-      </p>
-    </div>
+            <p>
+              Turning academic data into meaningful insight.
+            </p>
+          </div>
 
-    <div className="footer-links">
+          <div className="footer-links">
 
-      <a href="#about">About</a>
-      <a href="#features">Features</a>
-      <a href="#process">How it works</a>
+            <a
+              href="#about"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("about");
+              }}
+            >
+              About
+            </a>
+            <a
+              href="#features"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("features");
+              }}
+            >
+              Features
+            </a>
+            <a
+              href="#process"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("process");
+              }}
+            >
+              How it works
+            </a>
 
-    </div>
+          </div>
 
-  </div>
-
-
-  <div className="footer-brand">
-    Attain<span>x</span>
-  </div>
+        </div>
 
 
-  <div className="footer-bottom">
+        <div className="footer-brand reveal-on-scroll">
+          Attain<span>x</span>
+        </div>
 
-    <span>
-      © 2026 Attainx
-    </span>
 
-    <span>
-      Academic Analytics
-    </span>
+        <div className="footer-bottom">
 
-    <span>
-      Built for better outcomes.
-    </span>
+          <span>
+            © 2026 Attainx
+          </span>
 
-  </div>
+          <span>
+            Academic Analytics
+          </span>
 
-</footer>
+          <span>
+            Built for better outcomes.
+          </span>
+
+        </div>
+
+      </footer>
 
     </main>
   );

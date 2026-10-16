@@ -7,7 +7,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 body {
@@ -114,7 +114,7 @@ a {
   left: 0;
 
   width: 100%;
-  height: 90px;
+  height: 84px;
 
   padding: 0 5vw;
 
@@ -125,16 +125,20 @@ a {
   background: transparent;
 
   z-index: 20;
+
+  box-sizing: border-box;
 }
 
 
 /* LOGO */
 
 .logo {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-
   gap: 10px;
+
+  height: 40px;
+  line-height: 1;
 
   color: #ffffff;
 
@@ -142,25 +146,19 @@ a {
   font-weight: 500;
 
   letter-spacing: -0.5px;
+
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.logo-mark {
-  width: 36px;
-  height: 36px;
+.logo img {
+  width: 34px;
+  height: 34px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  object-fit: contain;
 
-  border: 1px solid #4a4a4a;
-
-  border-radius: 50%;
-
-  font-size: 14px;
-
-  color: #ffffff;
-
-  background: rgba(255, 255, 255, 0.02);
+  display: block;
+  flex-shrink: 0;
 }
 
 
@@ -170,26 +168,37 @@ a {
 
 .nav-links {
   display: flex;
-
   align-items: center;
+  gap: 38px;
 
-  gap: 42px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
 }
 
 .nav-links button {
   position: relative;
 
-  border: none;
+  display: inline-flex;
+  align-items: center;
 
+  height: 40px;
+  padding: 0;
+  margin: 0;
+
+  border: none;
   background: transparent;
 
   color: #999999;
 
   font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
 
   cursor: pointer;
+  white-space: nowrap;
 
-  transition: color 0.3s ease;
+  transition: color 0.25s ease;
 }
 
 .nav-links button:hover {
@@ -202,12 +211,13 @@ a {
 ========================================= */
 
 .nav-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 10px;
 
-  gap: 12px;
-
-  padding: 12px 20px;
+  height: 40px;
+  padding: 0 22px;
 
   border: 1px solid #414141;
 
@@ -218,12 +228,16 @@ a {
   color: #ffffff;
 
   font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
 
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   transition:
     background 0.3s ease,
-    border 0.3s ease,
+    border-color 0.3s ease,
     color 0.3s ease;
 }
 
@@ -267,9 +281,9 @@ a {
   min-height: 100vh;
 
   padding:
-    150px
+    124px
     5vw
-    45px;
+    40px;
 
   display: flex;
 
@@ -324,6 +338,34 @@ a {
 
 
 /* =========================================
+   CREST COLUMNS BACKGROUND (HERO ONLY)
+========================================= */
+
+.hero-crest-columns {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+
+  /* Smooth gradient fade towards bottom of hero so it fades gracefully before About section */
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.95) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.95) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+
+/* =========================================
    HERO TOP INFORMATION
 ========================================= */
 
@@ -346,7 +388,9 @@ a {
 
   position: relative;
 
-  z-index: 5;
+  z-index: 10;
+
+  margin-bottom: 24px;
 }
 
 
@@ -362,13 +406,15 @@ a {
   max-width: 1150px;
 
   margin: auto 0;
+
+  padding: 10px 0 20px;
 }
 
 
 /* SMALL LABEL */
 
 .eyebrow {
-  margin: 0 0 25px;
+  margin: 0 0 20px;
 
   color: #777777;
 
@@ -395,11 +441,11 @@ a {
     125px
   );
 
-  line-height: 0.88;
+  line-height: 0.94;
 
   font-weight: 400;
 
-  letter-spacing: -6px;
+  letter-spacing: -4px;
 
   color: #ffffff;
 }
@@ -414,9 +460,11 @@ a {
 ========================================= */
 
 .hero-description {
-  max-width: 470px;
+  max-width: 480px;
 
-  margin-top: 38px;
+  margin-top: 28px;
+
+  margin-bottom: 0;
 
   color: #777777;
 
@@ -435,20 +483,24 @@ a {
 
   align-items: center;
 
-  gap: 15px;
+  gap: 16px;
 
-  margin-top: 35px;
+  margin-top: 34px;
 }
 
 
 .primary-btn {
-  display: flex;
+  display: inline-flex;
 
   align-items: center;
 
-  gap: 15px;
+  justify-content: center;
 
-  padding: 15px 24px;
+  gap: 12px;
+
+  height: 46px;
+
+  padding: 0 24px;
 
   border: 1px solid #ffffff;
 
@@ -460,12 +512,18 @@ a {
 
   font-size: 14px;
 
+  font-weight: 500;
+
+  line-height: 1;
+
   cursor: pointer;
+
+  white-space: nowrap;
 
   transition:
     background 0.3s ease,
     color 0.3s ease,
-    border 0.3s ease;
+    border-color 0.3s ease;
 }
 
 .primary-btn:hover {
@@ -478,7 +536,15 @@ a {
 
 
 .secondary-btn {
-  padding: 15px 24px;
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  height: 46px;
+
+  padding: 0 24px;
 
   border: 1px solid #444444;
 
@@ -490,11 +556,17 @@ a {
 
   font-size: 14px;
 
+  font-weight: 400;
+
+  line-height: 1;
+
   cursor: pointer;
+
+  white-space: nowrap;
 
   transition:
     background 0.3s ease,
-    border 0.3s ease;
+    border-color 0.3s ease;
 }
 
 .secondary-btn:hover {
@@ -516,13 +588,15 @@ a {
 
   gap: 30px;
 
-  padding-top: 20px;
+  padding-top: 24px;
 
   border-top: 1px solid #202020;
 
   position: relative;
 
-  z-index: 5;
+  z-index: 10;
+
+  margin-top: 24px;
 }
 
 
@@ -770,6 +844,69 @@ a {
   color: #222222;
 
   font-size: 12px;
+}
+
+
+/* =========================================
+   ABOUT SECTION WITH TICKER DELTA
+========================================= */
+
+.about-layout {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+  gap: 50px;
+  width: 100%;
+  position: relative;
+  z-index: 3;
+}
+
+.about-content-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.about-visual-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.ticker-delta-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  height: 580px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  overflow: visible;
+}
+
+@media (max-width: 1080px) {
+  .about-layout {
+    grid-template-columns: 1fr;
+    gap: 50px;
+  }
+
+  .ticker-delta-wrapper {
+    max-width: 500px;
+    height: 500px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .ticker-delta-wrapper {
+    max-width: 100%;
+    height: 360px;
+  }
 }
 
 
@@ -1481,27 +1618,4 @@ a {
   *::after {
     transition: none !important;
   }
-}
-
-.logo img {
-  width: 38px;
-  height: 38px;
-
-  object-fit: contain;
-
-  display: block;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-
-  gap: 10px;
-
-  color: #ffffff;
-
-  font-size: 21px;
-  font-weight: 500;
-
-  letter-spacing: -0.5px;
 }

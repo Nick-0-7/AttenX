@@ -1,6 +1,7 @@
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
+const { Readable } = require("stream");
 
 /**
  * NBA Attainment Level Mapping (0-3)
@@ -34,7 +35,17 @@ function detectMaxMarks(marksArray, fallback = 20) {
  */
 async function parseMarksheetBuffer(buffer) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  try {
+    await workbook.xlsx.load(buffer);
+  } catch (xlsxErr) {
+    // If not a valid xlsx archive, attempt reading as CSV
+    try {
+      await workbook.csv.read(Readable.from(buffer));
+    } catch (csvErr) {
+      throw new Error(`Failed to parse file: Please provide a valid .xlsx or .csv spreadsheet.`);
+    }
+  }
+
   const sheet = workbook.worksheets[0];
 
   if (!sheet || sheet.rowCount < 2) {
