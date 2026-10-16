@@ -1057,29 +1057,313 @@ td input:focus {
 }
 
 .report-preview {
-  margin: 24px 0;
-  padding: 28px;
+  margin: 28px 0;
+  padding: 40px;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text);
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.report-preview h1,
+.report-preview h2,
+.report-preview h3,
+.report-preview h4 {
+  text-align: center;
+  color: #0f172a;
+  margin: 12px 0 6px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.report-preview h1 {
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.report-preview h2 {
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+.report-preview h3 {
+  font-size: 14px;
+}
+
+.report-preview p {
+  color: #1e293b;
+  margin: 6px 0;
+  line-height: 1.5;
+  font-size: 13.5px;
 }
 
 .report-preview table {
   width: 100%;
   border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 12.5px;
+  background: #ffffff;
+}
+
+.report-preview table,
+.report-preview th,
+.report-preview td {
+  border: 1px solid #94a3b8;
 }
 
 .report-preview th,
 .report-preview td {
-  border: 1px solid var(--border);
-  padding: 10px;
-  color: var(--text);
+  padding: 8px 10px;
+  color: #0f172a;
+  vertical-align: middle;
+  text-align: center;
 }
 
 .report-preview th {
+  background: #f1f5f9;
+  font-weight: 700;
+  text-align: center;
+}
+
+.report-preview td {
+  text-align: center;
+}
+
+/* For student names and CO statements where the 2nd column is descriptive text */
+.report-preview table td:nth-child(2):not(:last-child) {
+  text-align: left;
+  padding-left: 12px;
+}
+
+/* In 2-column key-value metadata tables, left-align cells */
+.report-preview table:has(tr td:nth-child(2):last-child) td {
+  text-align: left;
+  padding-left: 10px;
+}
+
+.report-preview table p {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  line-height: 1.35;
+}
+
+/* Download Action Button Group & Modal */
+.report-download-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.download-option-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.download-btn-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border: 1px solid #334155;
+}
+
+.download-btn-primary:hover {
+  background: #1e293b;
+  border-color: #64748b;
+  transform: translateY(-1px);
+}
+
+.download-btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.download-btn-secondary:hover {
   background: var(--surface-2);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.download-format-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.download-format-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-width: 480px;
+  width: 100%;
+  padding: 28px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.download-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.download-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.download-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.download-modal-close:hover {
+  color: var(--text);
+}
+
+.download-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.download-format-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.download-format-card:hover {
+  border-color: #3b82f6;
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.download-format-icon {
+  font-size: 30px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.download-format-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.download-format-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-format-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.download-format-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.download-format-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.course-info-inputs-card {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr;
+  gap: 16px;
+  padding: 20px;
+  margin-top: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.course-input-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.course-input-col label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.portal-input-clean {
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.portal-input-clean:focus {
+  border-color: #3b82f6;
+}
+
+@media (max-width: 768px) {
+  .course-info-inputs-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 .report-error {

@@ -16,6 +16,9 @@ function Portal() {
   const [reportHtml, setReportHtml] = useState("");
   const [reportBlob, setReportBlob] = useState(null);
   const [reportError, setReportError] = useState("");
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const reportPreviewRef = useRef(null);
 
   // Temporary hardcoded logged-in user
   const [user, setUser] = useState({
@@ -108,8 +111,8 @@ function Portal() {
   const [mapping, setMapping] = useState(createEmptyMapping());
 
   // Subject Selection and Auto-fetch state
-  const [selectedSubjectCode, setSelectedSubjectCode] = useState("");
-  const [selectedSubjectTitle, setSelectedSubjectTitle] = useState("");
+  const [selectedSubjectCode, setSelectedSubjectCode] = useState("CS301");
+  const [selectedSubjectTitle, setSelectedSubjectTitle] = useState("Data Structures & Algorithms");
   const [isAutoLoaded, setIsAutoLoaded] = useState(false);
 
   // Available subjects filtered by Academic Year
@@ -455,6 +458,84 @@ function Portal() {
       );
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // =========================================
+  // REPORT EXPORT: WORD & PDF
+  // =========================================
+  const downloadWordReport = () => {
+    if (!reportBlob) return;
+    const url = URL.createObjectURL(reportBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+    link.download = `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setShowDownloadModal(false);
+  };
+
+  const downloadPdfReport = async () => {
+    if (!reportPreviewRef.current && !reportHtml) return;
+    setIsExportingPdf(true);
+    try {
+      const html2pdfModule = await import("html2pdf.js");
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+      const element = reportPreviewRef.current || document.querySelector(".report-preview");
+      if (!element) throw new Error("Report preview element not found");
+
+      const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      await html2pdf().set(opt).from(element).save();
+      setShowDownloadModal(false);
+    } catch (err) {
+      console.error("PDF generation via html2pdf failed, falling back to print dialog:", err);
+      // Fallback: styled print window
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Attainx Report - ${selectedSubjectTitle || "Course Report"}</title>
+              <style>
+                @page { size: A4 portrait; margin: 15mm; }
+                body { font-family: 'Times New Roman', Times, serif; color: #000; padding: 20px; }
+                h1, h2, h3, h4 { text-align: center; margin: 8px 0; }
+                table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11pt; }
+                th, td { border: 1px solid #333; padding: 6px 8px; }
+                th { background: #f0f0f0; text-align: center; font-weight: bold; }
+                td { text-align: center; }
+                td:first-child, td:nth-child(2) { text-align: left; }
+                p { margin: 4px 0; }
+              </style>
+            </head>
+            <body>
+              ${reportPreviewRef.current ? reportPreviewRef.current.innerHTML : reportHtml}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
+      setShowDownloadModal(false);
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -1029,6 +1110,45 @@ function Portal() {
                 </div>
               </div>
 
+              {/* Explicit Course Information Inputs */}
+              <div className="course-info-inputs-card">
+                <div className="course-input-col">
+                  <label htmlFor="course-name-input">Course Name / Title</label>
+                  <input
+                    id="course-name-input"
+                    className="portal-input-clean"
+                    type="text"
+                    value={selectedSubjectTitle}
+                    onChange={(e) => setSelectedSubjectTitle(e.target.value)}
+                    placeholder="e.g., Data Structures & Algorithms"
+                  />
+                </div>
+
+                <div className="course-input-col">
+                  <label htmlFor="course-code-input">Course Code</label>
+                  <input
+                    id="course-code-input"
+                    className="portal-input-clean"
+                    type="text"
+                    value={selectedSubjectCode}
+                    onChange={(e) => setSelectedSubjectCode(e.target.value)}
+                    placeholder="e.g., CS301"
+                  />
+                </div>
+
+                <div className="course-input-col">
+                  <label htmlFor="course-faculty-input">Faculty / Instructor</label>
+                  <input
+                    id="course-faculty-input"
+                    className="portal-input-clean"
+                    type="text"
+                    value={facultyName}
+                    onChange={(e) => setFacultyName(e.target.value)}
+                    placeholder="Faculty name"
+                  />
+                </div>
+              </div>
+
               {isAutoLoaded && (
                 <div className="curriculum-badge-banner">
                   <span className="curriculum-badge-icon">✓</span>
@@ -1311,7 +1431,7 @@ function Portal() {
 
               {reportHtml && (
                 <>
-                  <div className="report-preview">
+                  <div className="report-preview" ref={reportPreviewRef}>
                     <div
                       dangerouslySetInnerHTML={{
                         __html: reportHtml,
@@ -1319,27 +1439,34 @@ function Portal() {
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    className="calculate-button"
-                    onClick={() => {
-                      if (!reportBlob) return;
+                  <div className="report-download-group">
+                    <button
+                      type="button"
+                      className="calculate-button download-option-btn download-btn-primary"
+                      onClick={() => setShowDownloadModal(true)}
+                    >
+                      📥 Download Report ▾
+                    </button>
 
-                      const url = URL.createObjectURL(reportBlob);
-                      const link = document.createElement("a");
+                    <button
+                      type="button"
+                      className="download-option-btn download-btn-secondary"
+                      onClick={downloadWordReport}
+                      title="Download as Microsoft Word document (.docx)"
+                    >
+                      📄 Word (.docx)
+                    </button>
 
-                      link.href = url;
-                      link.download = `Attainx_${attainmentType}_Report.docx`;
-
-                      document.body.appendChild(link);
-                      link.click();
-                      link.remove();
-
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download Word Report <span>↓</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="download-option-btn download-btn-secondary"
+                      onClick={downloadPdfReport}
+                      disabled={isExportingPdf}
+                      title="Download as PDF document (.pdf)"
+                    >
+                      {isExportingPdf ? "Generating PDF..." : "📑 PDF (.pdf)"}
+                    </button>
+                  </div>
                 </>
               )}
             </section>
@@ -1644,6 +1771,79 @@ function Portal() {
           </div>
         )}
       </main>
+
+      {/* =====================================
+          DOWNLOAD FORMAT SELECTION MODAL
+      ===================================== */}
+      {showDownloadModal && (
+        <div
+          className="download-format-modal-backdrop"
+          onClick={() => setShowDownloadModal(false)}
+        >
+          <div
+            className="download-format-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="download-modal-title"
+          >
+            <div className="download-modal-header">
+              <h3 id="download-modal-title">Select Download Format</h3>
+              <button
+                type="button"
+                className="download-modal-close"
+                onClick={() => setShowDownloadModal(false)}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <p style={{ color: "var(--muted)", fontSize: "13px", marginBottom: "18px" }}>
+              Which format would you like to download your report in?
+            </p>
+
+            <div className="download-options-list">
+              <button
+                type="button"
+                className="download-format-card"
+                onClick={downloadPdfReport}
+                disabled={isExportingPdf}
+              >
+                <div className="download-format-icon">📑</div>
+                <div className="download-format-info">
+                  <div className="download-format-title-row">
+                    <span className="download-format-title">PDF Document</span>
+                    <span className="download-format-badge">.PDF</span>
+                  </div>
+                  <span className="download-format-desc">
+                    {isExportingPdf
+                      ? "Generating PDF document..."
+                      : "Standard formatted A4 PDF, ideal for printing and NBA/NAAC audit submissions."}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="download-format-card"
+                onClick={downloadWordReport}
+              >
+                <div className="download-format-icon">📄</div>
+                <div className="download-format-info">
+                  <div className="download-format-title-row">
+                    <span className="download-format-title">Microsoft Word</span>
+                    <span className="download-format-badge">.DOCX</span>
+                  </div>
+                  <span className="download-format-desc">
+                    Editable institutional Word document containing all formatted tables and values.
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
