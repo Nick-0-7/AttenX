@@ -284,6 +284,195 @@ const IconChevronDown = ({ size = 14, className = "" }) => (
   </svg>
 );
 
+const MATRIX_COLGROUP = `<colgroup>
+    <col style="width: 14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+    <col style="width: 6.14% !important;">
+  </colgroup>`;
+
+const CES_COLGROUP = `<colgroup>
+    <col style="width: 8% !important;">
+    <col style="width: 8% !important;">
+    <col style="width: 10% !important;">
+    <col style="width: 9% !important;">
+    <col style="width: 65% !important;">
+  </colgroup>`;
+
+/**
+ * Classifies tables and structural elements from Mammoth HTML so that
+ * institutional letterheads, signature blocks, 15-column matrices,
+ * and assessment tables maintain pristine alignments in both preview and PDF export.
+ */
+function formatReportHtml(rawHtml) {
+  if (!rawHtml) return "";
+
+  // 1. Remove empty nested artifact tables created by Mammoth from Word shapes
+  let processed = rawHtml.replace(/<table>\s*<tr>\s*<td>\s*<\/td>\s*<\/tr>\s*<\/table>/gi, "");
+
+  // 2. Classify tables with semantic classes and inject precise column specifications
+  processed = processed.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+    const text = tableHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+    // College Letterhead table (contains logo or college name)
+    if (
+      tableHtml.includes("<img") ||
+      text.includes("Shri Shamrao") ||
+      text.includes("COLLEGE OF ENGINEERING") ||
+      text.includes("Autonomous Institute")
+    ) {
+      return tableHtml.replace("<table", '<table class="report-letterhead-table"');
+    }
+
+    // Signature table (contains Prepared By / Verified By / Head of Department)
+    if (
+      text.includes("Prepared By") &&
+      (text.includes("Verified By") || text.includes("Head of Department"))
+    ) {
+      return tableHtml.replace("<table", '<table class="report-signature-table"');
+    }
+
+    // Course Details / Metadata table
+    if (text.includes("Course:-") || text.includes("Course Code:-")) {
+      return tableHtml.replace("<table", '<table class="report-metadata-table"');
+    }
+
+    // 15-column CO-PO / PSO mapping matrix
+    if (
+      text.includes("PO1") &&
+      text.includes("PO2") &&
+      (text.includes("PSO") || text.includes("PO 10") || text.includes("PO 11"))
+    ) {
+      return tableHtml
+        .replace("<table", '<table class="report-matrix-table"')
+        .replace(/<table[^>]*>/, `$&${MATRIX_COLGROUP}`);
+    }
+
+    // Course Exit Survey (CES) table
+    if (text.includes(">70%") || text.includes("55-70%") || text.includes("Attainment out of 3")) {
+      return tableHtml
+        .replace("<table", '<table class="report-ces-table report-data-table"')
+        .replace(/<table[^>]*>/, `$&${CES_COLGROUP}`);
+    }
+
+    // CO Statements table (CO1 -, CO2 -, etc.)
+    if (/CO[1-6]\s*-/.test(text)) {
+      return tableHtml.replace("<table", '<table class="report-co-statements-table"');
+    }
+
+    // Default to standard data table
+    return tableHtml.replace("<table", '<table class="report-data-table"');
+  });
+
+  // 3. Insert clean A4 page breaks ONLY at logical section boundaries:
+  let sigIndex = 0;
+  processed = processed.replace(/<table class="report-signature-table"[\s\S]*?<\/table>/gi, (match) => {
+    sigIndex++;
+    if (sigIndex === 1) {
+      return match + '<div class="html2pdf__page-break page-break-section"></div>';
+    }
+    return match;
+  });
+
+  processed = processed.replace(
+    /(<p><strong>\s*D\]\s*Attainment from End Semester Exam)/i,
+    '<div class="html2pdf__page-break page-break-section"></div>$1'
+  );
+
+  processed = processed.replace(
+    /(<p><strong>\s*Attainment of CO(?:’|\')s with PO(?:’|\')s)/i,
+    '<div class="html2pdf__page-break page-break-section"></div>$1'
+  );
+
+  return processed;
+}
+
+/**
+ * Ensures all table elements in a rendered DOM node have the proper semantic classes, colgroups, and page breaks
+ */
+function ensureTableClasses(container) {
+  if (!container) return;
+  const tables = container.querySelectorAll("table");
+  let sigIndex = 0;
+
+  tables.forEach((table) => {
+    const text = table.textContent || "";
+    const hasImg = table.querySelector("img");
+
+    if (
+      hasImg ||
+      text.includes("Shri Shamrao") ||
+      text.includes("COLLEGE OF ENGINEERING") ||
+      text.includes("Autonomous Institute")
+    ) {
+      table.classList.add("report-letterhead-table");
+    } else if (
+      text.includes("Prepared By") &&
+      (text.includes("Verified By") || text.includes("Head of Department"))
+    ) {
+      table.classList.add("report-signature-table");
+      sigIndex++;
+      if (sigIndex === 1 && !table.nextElementSibling?.classList.contains("html2pdf__page-break")) {
+        const breakEl = document.createElement("div");
+        breakEl.className = "html2pdf__page-break page-break-section";
+        table.parentNode.insertBefore(breakEl, table.nextSibling);
+      }
+    } else if (text.includes("Course:-") || text.includes("Course Code:-")) {
+      table.classList.add("report-metadata-table");
+    } else if (
+      text.includes("PO1") &&
+      text.includes("PO2") &&
+      (text.includes("PSO") || text.includes("PO 10") || text.includes("PO 11"))
+    ) {
+      table.classList.add("report-matrix-table");
+      if (!table.querySelector("colgroup")) {
+        table.insertAdjacentHTML("afterbegin", MATRIX_COLGROUP);
+      }
+    } else if (text.includes(">70%") || text.includes("55-70%") || text.includes("Attainment out of 3")) {
+      table.classList.add("report-ces-table", "report-data-table");
+      if (!table.querySelector("colgroup")) {
+        table.insertAdjacentHTML("afterbegin", CES_COLGROUP);
+      }
+    } else if (/CO[1-6]\s*-/.test(text)) {
+      table.classList.add("report-co-statements-table");
+    } else {
+      table.classList.add("report-data-table");
+    }
+  });
+
+  const paragraphs = container.querySelectorAll("p");
+  paragraphs.forEach((p) => {
+    const text = p.textContent || "";
+    if (
+      text.includes("Attainment from End Semester Exam") &&
+      !p.previousElementSibling?.classList.contains("html2pdf__page-break")
+    ) {
+      const breakEl = document.createElement("div");
+      breakEl.className = "html2pdf__page-break page-break-section";
+      p.parentNode.insertBefore(breakEl, p);
+    } else if (
+      text.includes("Attainment of CO") &&
+      text.includes("with PO") &&
+      !p.previousElementSibling?.classList.contains("html2pdf__page-break")
+    ) {
+      const breakEl = document.createElement("div");
+      breakEl.className = "html2pdf__page-break page-break-section";
+      p.parentNode.insertBefore(breakEl, p);
+    }
+  });
+}
+
 function Portal() {
   const navigate = useNavigate();
 
@@ -536,9 +725,18 @@ function Portal() {
   const [targetCA1, setTargetCA1] = useState(60);
   const [targetCA2, setTargetCA2] = useState(60);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [reportHtml, setReportHtml] = useState("");
   const [reportBlob, setReportBlob] = useState(null);
   const [reportError, setReportError] = useState("");
+  const reportPreviewRef = useRef(null);
+
+  // Institutional Metadata Signatories, Class & Academic Year
+  const [verifiedBy, setVerifiedBy] = useState("Academic Audit Committee");
+  const [hodName, setHodName] = useState("Head of Department");
+  const [className, setClassName] = useState("TE CSE");
+  const [reportAcademicYear, setReportAcademicYear] = useState("2025-26");
 
   // References for keyboard navigation
   const facultyRef = useRef(null);
@@ -937,15 +1135,22 @@ function Portal() {
 
     try {
       let response;
+      const effYear = reportAcademicYear || "2025-26";
+      const effTitle = selectedSubjectTitle || "Data Science and Visualization";
+      const effCode = selectedSubjectCode || "23CS2404";
+
       if (uploadedFile) {
         const formData = new FormData();
         formData.append("file", uploadedFile);
         formData.append("attainmentType", attainmentType);
         formData.append("facultyName", facultyName);
-        formData.append("academicYear", academicYear);
+        formData.append("academicYear", effYear);
         formData.append("department", department);
-        formData.append("courseCode", selectedSubjectCode || "");
-        formData.append("courseTitle", selectedSubjectTitle || "");
+        formData.append("className", className);
+        formData.append("verifiedBy", verifiedBy);
+        formData.append("hodName", hodName);
+        formData.append("courseCode", effCode);
+        formData.append("courseTitle", effTitle);
         formData.append("targetCA1", targetCA1);
         formData.append("targetCA2", targetCA2);
         formData.append("directWeight", 0.9);
@@ -971,10 +1176,13 @@ function Portal() {
             body: JSON.stringify({
               attainmentType,
               facultyName,
-              academicYear,
+              academicYear: effYear,
               department,
-              courseCode: selectedSubjectCode,
-              courseTitle: selectedSubjectTitle,
+              className,
+              verifiedBy,
+              hodName,
+              courseCode: effCode,
+              courseTitle: effTitle,
               targetCA1,
               targetCA2,
               cos,
@@ -996,8 +1204,9 @@ function Portal() {
         arrayBuffer,
       });
 
+      const formattedHtml = formatReportHtml(result.value);
       setReportBlob(blob);
-      setReportHtml(result.value);
+      setReportHtml(formattedHtml);
 
       // Extract calculation metadata from response header or calculate-live endpoint
       let metaDataObj = null;
@@ -1065,7 +1274,7 @@ function Portal() {
         targetCA1,
         targetCA2,
         metadata: metaDataObj || null,
-        reportHtml: result.value,
+        reportHtml: formattedHtml,
       };
       saveHistoryItem(historyRecord);
 
@@ -1085,6 +1294,151 @@ function Portal() {
       );
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // =========================================
+  // REPORT EXPORT: WORD & PDF
+  // =========================================
+  const downloadWordReport = () => {
+    if (!reportBlob) return;
+    const url = URL.createObjectURL(reportBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+    link.download = `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setShowDownloadModal(false);
+  };
+
+  const downloadPdfReport = async () => {
+    setIsExportingPdf(true);
+    try {
+      let response;
+      const effYear = reportAcademicYear || "2025-26";
+      const effTitle = selectedSubjectTitle || "Data Science and Visualization";
+      const effCode = selectedSubjectCode || "23CS2404";
+
+      if (uploadedFile) {
+        const formData = new FormData();
+        formData.append("file", uploadedFile);
+        formData.append("attainmentType", attainmentType);
+        formData.append("facultyName", facultyName);
+        formData.append("academicYear", effYear);
+        formData.append("department", department);
+        formData.append("className", className);
+        formData.append("verifiedBy", verifiedBy);
+        formData.append("hodName", hodName);
+        formData.append("courseCode", effCode);
+        formData.append("courseTitle", effTitle);
+        formData.append("targetCA1", targetCA1);
+        formData.append("targetCA2", targetCA2);
+        formData.append("directWeight", 0.9);
+        formData.append("indirectWeight", 0.1);
+        formData.append("cos", JSON.stringify(cos));
+        formData.append("mapping", JSON.stringify(mapping));
+        if (calculationMetadata) {
+          formData.append("calculatedAttainment", JSON.stringify(calculationMetadata));
+        }
+
+        response = await fetch(
+          "http://localhost:5000/api/reports/create-report?format=pdf",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+      } else {
+        response = await fetch(
+          "http://localhost:5000/api/reports/create-report?format=pdf",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              attainmentType,
+              facultyName,
+              academicYear: effYear,
+              department,
+              className,
+              verifiedBy,
+              hodName,
+              courseCode: effCode,
+              courseTitle: effTitle,
+              targetCA1,
+              targetCA2,
+              cos,
+              mapping,
+              calculatedAttainment: calculationMetadata,
+            }),
+          }
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to generate PDF from backend server.");
+      }
+
+      const pdfBlob = await response.blob();
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+      link.download = `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setShowDownloadModal(false);
+    } catch (err) {
+      console.warn("Backend PDF generation error, trying html2pdf fallback:", err);
+      const element = reportPreviewRef.current || document.querySelector(".report-preview");
+      if (element) {
+        try {
+          ensureTableClasses(element);
+          element.classList.add("exporting-pdf");
+          await new Promise((resolve) => setTimeout(resolve, 120));
+
+          const html2pdfModule = await import("html2pdf.js");
+          const html2pdf = html2pdfModule.default || html2pdfModule;
+          const safeCourse = (selectedSubjectCode || selectedSubjectTitle || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+
+          const opt = {
+            margin: [6, 8, 6, 8],
+            filename: `Attainx_${attainmentType || "Theory"}_Report_${safeCourse}.pdf`,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              letterRendering: true,
+              scrollY: 0,
+              scrollX: 0,
+              windowWidth: 720,
+            },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            pagebreak: {
+              mode: ["css", "legacy"],
+              before: ".html2pdf__page-break",
+              avoid: ["tr", ".report-signature-table", "h1", "h2", "h3"],
+            },
+          };
+
+          await html2pdf().set(opt).from(element).save();
+          setShowDownloadModal(false);
+        } catch (hErr) {
+          window.print();
+          setShowDownloadModal(false);
+        } finally {
+          element.classList.remove("exporting-pdf");
+        }
+      }
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -2598,6 +2952,93 @@ function Portal() {
               </div>
             </div>
 
+            {/* Course Information Inputs Card */}
+            <div className="course-info-inputs-card">
+              <div className="course-input-col">
+                <label htmlFor="course-title-input">Course Name / Title</label>
+                <input
+                  id="course-title-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={selectedSubjectTitle}
+                  onChange={(e) => setSelectedSubjectTitle(e.target.value)}
+                  placeholder="e.g. Database Management Systems"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-code-input">Course Code</label>
+                <input
+                  id="course-code-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={selectedSubjectCode}
+                  onChange={(e) => setSelectedSubjectCode(e.target.value)}
+                  placeholder="e.g. 23CS2404"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-year-input">Academic Year</label>
+                <input
+                  id="course-year-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={reportAcademicYear}
+                  onChange={(e) => setReportAcademicYear(e.target.value)}
+                  placeholder="e.g. 2025-26"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-faculty-input">Faculty / Instructor</label>
+                <input
+                  id="course-faculty-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={facultyName}
+                  onChange={(e) => setFacultyName(e.target.value)}
+                  placeholder="e.g. Dr. Faculty Name"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-class-input">Class / Division</label>
+                <input
+                  id="course-class-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
+                  placeholder="e.g. TE CSE"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-verified-input">Verified By</label>
+                <input
+                  id="course-verified-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={verifiedBy}
+                  onChange={(e) => setVerifiedBy(e.target.value)}
+                  placeholder="e.g. Academic Audit Committee"
+                />
+              </div>
+
+              <div className="course-input-col">
+                <label htmlFor="course-hod-input">Head of Department</label>
+                <input
+                  id="course-hod-input"
+                  className="portal-input-clean"
+                  type="text"
+                  value={hodName}
+                  onChange={(e) => setHodName(e.target.value)}
+                  placeholder="e.g. Dr. Head of Department"
+                />
+              </div>
+            </div>
+
             {/* TARGETS & CALCULATE BUTTON */}
             <section className="calculate-section">
               <div>
@@ -2783,7 +3224,7 @@ function Portal() {
 
               {reportHtml && (
                 <>
-                  <div className="report-preview">
+                  <div className="report-preview" ref={reportPreviewRef}>
                     <div
                       dangerouslySetInnerHTML={{
                         __html: reportHtml,
@@ -2791,24 +3232,34 @@ function Portal() {
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    className="calculate-button"
-                    onClick={() => {
-                      if (!reportBlob) return;
-                      const url = URL.createObjectURL(reportBlob);
-                      const link = document.createElement("a");
-                      link.href = url;
-                      link.download = `Attainx_${attainmentType}_Report.docx`;
-                      document.body.appendChild(link);
-                      link.click();
-                      link.remove();
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download Word Report (.docx)
-                    <IconDownload size={16} />
-                  </button>
+                  <div className="report-download-group">
+                    <button
+                      type="button"
+                      className="calculate-button download-option-btn download-btn-primary"
+                      onClick={() => setShowDownloadModal(true)}
+                    >
+                      📥 Download Report ▾
+                    </button>
+
+                    <button
+                      type="button"
+                      className="download-option-btn download-btn-secondary"
+                      onClick={downloadWordReport}
+                      title="Download as Microsoft Word document (.docx)"
+                    >
+                      📄 Word (.docx)
+                    </button>
+
+                    <button
+                      type="button"
+                      className="download-option-btn download-btn-secondary"
+                      onClick={downloadPdfReport}
+                      disabled={isExportingPdf}
+                      title="Download as PDF document (.pdf)"
+                    >
+                      {isExportingPdf ? "Generating PDF..." : "📑 PDF (.pdf)"}
+                    </button>
+                  </div>
                 </>
               )}
             </section>
@@ -2862,6 +3313,79 @@ function Portal() {
           </div>
         </div>
       </main>
+
+      {/* =====================================
+          DOWNLOAD FORMAT SELECTION MODAL
+      ===================================== */}
+      {showDownloadModal && (
+        <div
+          className="download-format-modal-backdrop"
+          onClick={() => setShowDownloadModal(false)}
+        >
+          <div
+            className="download-format-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="download-modal-title"
+          >
+            <div className="download-modal-header">
+              <h3 id="download-modal-title">Select Download Format</h3>
+              <button
+                type="button"
+                className="download-modal-close"
+                onClick={() => setShowDownloadModal(false)}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <p style={{ color: "var(--muted)", fontSize: "13px", marginBottom: "18px" }}>
+              Which format would you like to download your report in?
+            </p>
+
+            <div className="download-options-list">
+              <button
+                type="button"
+                className="download-format-card"
+                onClick={downloadPdfReport}
+                disabled={isExportingPdf}
+              >
+                <div className="download-format-icon">📑</div>
+                <div className="download-format-info">
+                  <div className="download-format-title-row">
+                    <span className="download-format-title">PDF Document</span>
+                    <span className="download-format-badge">.PDF</span>
+                  </div>
+                  <span className="download-format-desc">
+                    {isExportingPdf
+                      ? "Generating PDF document..."
+                      : "Standard formatted A4 PDF, ideal for printing and NBA/NAAC audit submissions."}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="download-format-card"
+                onClick={downloadWordReport}
+              >
+                <div className="download-format-icon">📄</div>
+                <div className="download-format-info">
+                  <div className="download-format-title-row">
+                    <span className="download-format-title">Microsoft Word</span>
+                    <span className="download-format-badge">.DOCX</span>
+                  </div>
+                  <span className="download-format-desc">
+                    Editable institutional Word document containing all formatted tables and values.
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

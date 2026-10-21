@@ -7,6 +7,7 @@ const {
 const {
   generateReportFromTemplate,
   getTemplateFileName,
+  convertDocxBufferToPdfBuffer,
 } = require("../services/reportTemplate.service");
 
 /**
@@ -192,6 +193,29 @@ const createFrontendReport = async (req, res, next) => {
     });
 
     console.log(`[createFrontendReport] Template used: ${templateFileName}, placeholders replaced: ${totalReplaced}`);
+
+    const format = String(req.query.format || req.body.format || "docx").toLowerCase().trim();
+
+    if (format === "pdf") {
+      try {
+        console.log(`[createFrontendReport] Converting DOCX to native Word-rendered PDF...`);
+        const pdfBuffer = await convertDocxBufferToPdfBuffer(buffer);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename=Attainx_${attainmentType}_Report.pdf`
+        );
+        if (calculatedAttainment) {
+          res.setHeader(
+            "X-Calculation-Summary",
+            encodeURIComponent(JSON.stringify(calculatedAttainment))
+          );
+        }
+        return res.send(pdfBuffer);
+      } catch (pdfErr) {
+        console.error("[createFrontendReport] PDF conversion failed, falling back to DOCX:", pdfErr);
+      }
+    }
 
     res.setHeader(
       "Content-Type",

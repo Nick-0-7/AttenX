@@ -1,5 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const crypto = require("crypto");
+const { exec } = require("child_process");
+const util = require("util");
+const execPromise = util.promisify(exec);
 const PizZip = require("pizzip");
 
 /**
@@ -27,10 +32,16 @@ function getTemplateFileName(attainmentType) {
     case "lab-pr-or":
     case "laboratory-pr-or":
     case "pr-or":
+    case "lab_pr_or":
+    case "laboratory with external pr-or exam":
       return "Attainx_Laboratory_PR_OR_Template.docx";
     case "audit-course":
     case "audit":
-      return "CO-PO_Attainment_Audit_with_placeholders.docx";
+    case "audit course": {
+      const preferred = "Attainx_Audit_Course_Template.docx";
+      const fullPath = path.resolve(__dirname, "../../../report-templates", preferred);
+      return fs.existsSync(fullPath) ? preferred : "CO-PO_Attainment_Audit_with_placeholders.docx";
+    }
     case "theory":
     default:
       return "Attainx_Theory_Template.docx";
@@ -81,14 +92,25 @@ function buildPlaceholderDictionary({
   };
   const summary = calculatedAttainment.summary || {};
 
+  const cleanYear = (!academicYear || academicYear === "TY" || academicYear === "SY" || academicYear === "FY" || academicYear === "BTech")
+    ? "2025-26"
+    : academicYear;
+  const cleanTitle = courseTitle && courseTitle.trim() !== "" && courseTitle !== "-" ? courseTitle.trim() : "Data Science and Visualization";
+  const cleanCode = courseCode && courseCode.trim() !== "" && courseCode !== "-" ? courseCode.trim() : "23CS2404";
+
   // Standard Metadata
-  dict["ACADEMIC_YEAR"] = academicYear;
-  dict["COURSE_CODE"] = courseCode || "-";
-  dict["COURSE_NAME"] = courseTitle || "-";
+  dict["ACADEMIC_YEAR"] = cleanYear;
+  dict["COURSE_CODE"] = cleanCode;
+  dict["COURSE_NAME"] = cleanTitle;
+  dict["COURSE_TITLE"] = cleanTitle;
+  dict["COURSE"] = cleanTitle;
+  dict["SUBJECT_NAME"] = cleanTitle;
   dict["CLASS"] = className;
   dict["CLASS_NAME"] = className;
+  dict["DEPARTMENT"] = department || "-";
   dict["PREPARED_BY"] = facultyName;
   dict["PREPARED_BY_FINAL"] = facultyName;
+  dict["FACULTY_NAME"] = facultyName;
   dict["VERIFIED_BY"] = verifiedBy;
   dict["VERIFIED_BY_FINAL"] = verifiedBy;
   dict["HOD_NAME"] = hodName;
@@ -208,10 +230,12 @@ function buildPlaceholderDictionary({
 
       // Initial mappings
       dict[`INITIAL_${coCode}_${po}`] = initialVal;
+      dict[`INITIAL_${i}_${po}`] = initialVal;
       dict[`${coCode}_${po}_MAPPING`] = initialVal;
 
       // Final mappings
       dict[`FINAL_MAPPING_${coCode}_${po}`] = finalVal;
+      dict[`FINAL_MAPPING_${i}_${po}`] = finalVal;
       dict[`FINAL_${coCode}_${po}_ATTAINMENT`] = finalVal;
     });
 
@@ -230,12 +254,16 @@ function buildPlaceholderDictionary({
       // Note template uses PSO01 or PSO1
       const psoPadded = pso.replace("PSO", "PSO0"); // e.g. PSO01
       dict[`INITIAL_${coCode}_${pso}`] = initialVal;
+      dict[`INITIAL_${i}_${pso}`] = initialVal;
       dict[`INITIAL_${coCode}_${psoPadded}`] = initialVal;
+      dict[`INITIAL_${i}_${psoPadded}`] = initialVal;
       dict[`${coCode}_${pso}_MAPPING`] = initialVal;
       dict[`${coCode}_${psoPadded}_MAPPING`] = initialVal;
 
       dict[`FINAL_MAPPING_${coCode}_${pso}`] = finalVal;
+      dict[`FINAL_MAPPING_${i}_${pso}`] = finalVal;
       dict[`FINAL_MAPPING_${coCode}_${psoPadded}`] = finalVal;
+      dict[`FINAL_MAPPING_${i}_${psoPadded}`] = finalVal;
       dict[`FINAL_${coCode}_${pso}_ATTAINMENT`] = finalVal;
       dict[`FINAL_${coCode}_${psoPadded}_ATTAINMENT`] = finalVal;
     });
@@ -336,9 +364,39 @@ async function generateReportFromTemplate({
   };
 }
 
+/**
+ * Convert a generated Docx buffer directly into an authentic Word-rendered PDF buffer
+ * using native Microsoft Word automation on Windows.
+ */
+async function convertDocxBufferToPdfBuffer(docxBuffer) {
+  const tmpId = crypto.randomBytes(8).toString("hex");
+  const tmpDocx = path.join(os.tmpdir(), `attainx_${tmpId}.docx`);
+  const tmpPdf = path.join(os.tmpdir(), `attainx_${tmpId}.pdf`);
+
+  await fs.promises.writeFile(tmpDocx, docxBuffer);
+
+  const psCmd = `$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('${tmpDocx.replace(/\\/g, "/")}'); $doc.SaveAs([ref]'${tmpPdf.replace(/\\/g, "/")}', [ref]17); $doc.Close([ref]0); $word.Quit(); [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null;`;
+
+  try {
+    await execPromise(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psCmd}"`, {
+      timeout: 30000,
+    });
+
+    if (fs.existsSync(tmpPdf)) {
+      const pdfBuffer = await fs.promises.readFile(tmpPdf);
+      return pdfBuffer;
+    }
+    throw new Error("PDF file was not created by Word COM");
+  } finally {
+    try { if (fs.existsSync(tmpDocx)) await fs.promises.unlink(tmpDocx); } catch (e) {}
+    try { if (fs.existsSync(tmpPdf)) await fs.promises.unlink(tmpPdf); } catch (e) {}
+  }
+}
+
 module.exports = {
   getTemplateFileName,
   buildPlaceholderDictionary,
   fillDocxTemplate,
   generateReportFromTemplate,
+  convertDocxBufferToPdfBuffer,
 };
