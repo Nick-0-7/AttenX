@@ -375,18 +375,24 @@ async function convertDocxBufferToPdfBuffer(docxBuffer) {
 
   await fs.promises.writeFile(tmpDocx, docxBuffer);
 
-  const psCmd = `$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('${tmpDocx.replace(/\\/g, "/")}'); $doc.SaveAs([ref]'${tmpPdf.replace(/\\/g, "/")}', [ref]17); $doc.Close([ref]0); $word.Quit(); [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null;`;
-
   try {
-    await execPromise(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psCmd}"`, {
-      timeout: 30000,
-    });
+    if (process.platform === "win32") {
+      // Windows Native Word COM Automation
+      const psCmd = `$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('${tmpDocx.replace(/\\/g, "/")}'); $doc.SaveAs([ref]'${tmpPdf.replace(/\\/g, "/")}', [ref]17); $doc.Close([ref]0); $word.Quit(); [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null;`;
+      await execPromise(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psCmd}"`, {
+        timeout: 30000,
+      });
+    } else {
+      // Linux / Docker / Cloud headless LibreOffice conversion
+      const cmd = `libreoffice --headless --convert-to pdf --outdir "${os.tmpdir()}" "${tmpDocx}" || soffice --headless --convert-to pdf --outdir "${os.tmpdir()}" "${tmpDocx}"`;
+      await execPromise(cmd, { timeout: 30000 });
+    }
 
     if (fs.existsSync(tmpPdf)) {
       const pdfBuffer = await fs.promises.readFile(tmpPdf);
       return pdfBuffer;
     }
-    throw new Error("PDF file was not created by Word COM");
+    throw new Error("PDF file was not created by document conversion engine");
   } finally {
     try { if (fs.existsSync(tmpDocx)) await fs.promises.unlink(tmpDocx); } catch (e) {}
     try { if (fs.existsSync(tmpPdf)) await fs.promises.unlink(tmpPdf); } catch (e) {}

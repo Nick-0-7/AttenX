@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
 import { curriculumSubjects } from "../data/curriculumData";
+import API_BASE_URL from "../config/api";
 import "../templates/Portal.css";
 import attainxLogo from "../assets/attainx-logo.png";
 
@@ -543,7 +544,7 @@ function Portal() {
 
     // Optional background session ping to backend /api/auth/me
     if (token) {
-      fetch("http://localhost:5000/api/auth/me", {
+      fetch(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
@@ -1159,7 +1160,7 @@ function Portal() {
         formData.append("mapping", JSON.stringify(mapping));
 
         response = await fetch(
-          "http://localhost:5000/api/reports/create-report",
+          `${API_BASE_URL}/reports/create-report`,
           {
             method: "POST",
             body: formData,
@@ -1167,7 +1168,7 @@ function Portal() {
         );
       } else {
         response = await fetch(
-          "http://localhost:5000/api/reports/create-report",
+          `${API_BASE_URL}/reports/create-report`,
           {
             method: "POST",
             headers: {
@@ -1230,12 +1231,12 @@ function Portal() {
             liveForm.append("targetCA2", targetCA2);
             liveForm.append("cos", JSON.stringify(cos));
             liveForm.append("mapping", JSON.stringify(mapping));
-            liveRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+            liveRes = await fetch(`${API_BASE_URL}/reports/calculate-live`, {
               method: "POST",
               body: liveForm,
             });
           } else {
-            liveRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+            liveRes = await fetch(`${API_BASE_URL}/reports/calculate-live`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1345,7 +1346,7 @@ function Portal() {
         }
 
         response = await fetch(
-          "http://localhost:5000/api/reports/create-report?format=pdf",
+          `${API_BASE_URL}/reports/create-report?format=pdf`,
           {
             method: "POST",
             body: formData,
@@ -1353,7 +1354,7 @@ function Portal() {
         );
       } else {
         response = await fetch(
-          "http://localhost:5000/api/reports/create-report?format=pdf",
+          `${API_BASE_URL}/reports/create-report?format=pdf`,
           {
             method: "POST",
             headers: {
@@ -1470,7 +1471,7 @@ function Portal() {
       formData.append("cos", JSON.stringify(cos));
       formData.append("mapping", JSON.stringify(mapping));
 
-      const res = await fetch("http://localhost:5000/api/reports/calculate-live", {
+      const res = await fetch(`${API_BASE_URL}/reports/calculate-live`, {
         method: "POST",
         body: formData,
       });
