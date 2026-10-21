@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
@@ -9,6 +9,25 @@ import attainxLogo from "../assets/attainx-logo.png";
 // =========================================
 // SVG ICONS (Crisp, themeable, zero-emoji)
 // =========================================
+const IconTrash = ({ size = 16, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
 const IconCheck = ({ size = 16, className = "" }) => (
   <svg
     width={size}
@@ -272,18 +291,142 @@ function Portal() {
   const [currentStep, setCurrentStep] = useState(1);
   const [stepError, setStepError] = useState("");
 
-  // Temporary hardcoded logged-in user
-  const [user, setUser] = useState({
-    name: "Admin User",
-    department: "Computer Science Engineering",
-    email: "admin@example.com",
-    password: "admin123",
-    image: null,
-  });
+  // Read logged-in user details from authentication storage
+  const getStoredUser = () => {
+    try {
+      const stored = localStorage.getItem("currentUser");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          name: parsed.name || "Faculty Member",
+          department: parsed.department || "Computer Science Engineering",
+          email: parsed.email || "faculty@college.edu",
+          role: parsed.role || "TEACHER",
+          password: "••••••••",
+          image: parsed.image || null,
+        };
+      }
+    } catch (e) {
+      console.error("Failed to read user from localStorage", e);
+    }
+    return {
+      name: "Admin User",
+      department: "Computer Science Engineering",
+      email: "admin@college.edu",
+      role: "ADMIN",
+      password: "••••••••",
+      image: null,
+    };
+  };
+
+  const [user, setUser] = useState(getStoredUser);
 
   // Light mode by default as requested
   const [darkMode, setDarkMode] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Profile Card ref to detect outside clicks
+  const profileCardRef = useRef(null);
+
+  // Attainment History State (stored in localStorage)
+  const [historyItems, setHistoryItems] = useState(() => {
+    try {
+      const stored = localStorage.getItem("attainment_history");
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Calculation Metadata (KPIs, CO Results, PO Results, Survey)
+  const [calculationMetadata, setCalculationMetadata] = useState(null);
+
+  // Session verification on mount: verify login info and auth token
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("currentUser");
+    if (!token && !storedUser) {
+      console.warn("No active session found. Redirecting to login...");
+      navigate("/login");
+      return;
+    }
+
+    // Optional background session ping to backend /api/auth/me
+    if (token) {
+      fetch("http://localhost:5000/api/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.success && data.user) {
+            setUser((prev) => ({
+              ...prev,
+              name: data.user.name || prev.name,
+              email: data.user.email || prev.email,
+              role: data.user.role || prev.role,
+            }));
+          }
+        })
+        .catch(() => {
+          // Fallback gracefully to offline/local session
+        });
+    }
+  }, [navigate]);
+
+  // Handle clicking outside profile card to close it
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (
+        showProfile &&
+        profileCardRef.current &&
+        !profileCardRef.current.contains(e.target) &&
+        !e.target.closest(".sidebar-user") &&
+        !e.target.closest(".sidebar-bottom")
+      ) {
+        setShowProfile(false);
+      }
+    };
+
+    if (showProfile) {
+      document.addEventListener("mousedown", handleOutsideClick);
+      document.addEventListener("touchstart", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [showProfile]);
+
+  // Persist history changes to localStorage
+  const saveHistoryItem = (newItem) => {
+    setHistoryItems((prev) => {
+      const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50);
+      try {
+        localStorage.setItem("attainment_history", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteHistoryItem = (id) => {
+    setHistoryItems((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem("attainment_history", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const clearAllHistory = () => {
+    if (window.confirm("Are you sure you want to clear all attainment calculation history?")) {
+      setHistoryItems([]);
+      try {
+        localStorage.removeItem("attainment_history");
+      } catch (e) {}
+    }
+  };
 
   // =========================================
   // STEP 1: TEMPLATE GENERATOR STATE
@@ -856,6 +999,76 @@ function Portal() {
       setReportBlob(blob);
       setReportHtml(result.value);
 
+      // Extract calculation metadata from response header or calculate-live endpoint
+      let metaDataObj = null;
+      const headerMeta = response.headers.get("X-Calculation-Summary");
+      if (headerMeta) {
+        try {
+          metaDataObj = JSON.parse(decodeURIComponent(headerMeta));
+        } catch (e) {
+          console.warn("Failed to decode X-Calculation-Summary header:", e);
+        }
+      }
+
+      // If header was missing or stripped, fetch from calculate-live endpoint
+      if (!metaDataObj) {
+        try {
+          let liveRes;
+          if (uploadedFile) {
+            const liveForm = new FormData();
+            liveForm.append("file", uploadedFile);
+            liveForm.append("targetCA1", targetCA1);
+            liveForm.append("targetCA2", targetCA2);
+            liveForm.append("cos", JSON.stringify(cos));
+            liveForm.append("mapping", JSON.stringify(mapping));
+            liveRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+              method: "POST",
+              body: liveForm,
+            });
+          } else {
+            liveRes = await fetch("http://localhost:5000/api/reports/calculate-live", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                targetCA1,
+                targetCA2,
+                cos,
+                mapping,
+                useSample: true,
+              }),
+            });
+          }
+          if (liveRes.ok) {
+            const liveJson = await liveRes.json();
+            metaDataObj = liveJson.data;
+          }
+        } catch (mErr) {
+          console.warn("Could not retrieve live metadata:", mErr);
+        }
+      }
+
+      if (metaDataObj) {
+        setCalculationMetadata(metaDataObj);
+      }
+
+      // Save to attainment calculation history
+      const historyRecord = {
+        id: "att_" + Date.now(),
+        date: new Date().toLocaleString(),
+        timestamp: Date.now(),
+        courseCode: selectedSubjectCode || "SUB-01",
+        courseTitle: selectedSubjectTitle || "Course Outcome Assessment",
+        facultyName,
+        department,
+        academicYear,
+        attainmentType,
+        targetCA1,
+        targetCA2,
+        metadata: metaDataObj || null,
+        reportHtml: result.value,
+      };
+      saveHistoryItem(historyRecord);
+
       setTimeout(() => {
         document
           .getElementById("generated-report")
@@ -930,17 +1143,41 @@ function Portal() {
   const handleProfileImage = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUser({
-      ...user,
-      image: URL.createObjectURL(file),
-    });
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const updated = {
+        ...user,
+        image: reader.result,
+      };
+      setUser(updated);
+      try {
+        localStorage.setItem("currentUser", JSON.stringify(updated));
+      } catch {}
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUserChange = (field, value) => {
+    const updated = { ...user, [field]: value };
+    setUser(updated);
+    if (field === "name") {
+      setFacultyName(value);
+    }
+    if (field === "department") {
+      setDepartment(value);
+    }
+    try {
+      localStorage.setItem("currentUser", JSON.stringify(updated));
+    } catch {}
   };
 
   // =========================================
   // LOGOUT
   // =========================================
   const logout = () => {
-    navigate("/");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("currentUser");
+    navigate("/login");
   };
 
   // =========================================
@@ -1118,7 +1355,7 @@ function Portal() {
 
           <div className="user-details">
             <strong>{user.name}</strong>
-            <span>Faculty</span>
+            <span>{user.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()) : "Faculty"}</span>
           </div>
 
           <span className="dots">•••</span>
@@ -1159,12 +1396,27 @@ function Portal() {
 
           <button
             className="menu-item"
-            onClick={() => alert("Attainment calculation history will be archived here.")}
+            onClick={() => setShowHistory(true)}
           >
             <span>
               <IconHistory size={16} />
             </span>
             Attainment History
+            {historyItems.length > 0 && (
+              <span
+                style={{
+                  marginLeft: "auto",
+                  background: "#6366f1",
+                  color: "#fff",
+                  fontSize: "10.5px",
+                  fontWeight: "700",
+                  padding: "2px 7px",
+                  borderRadius: "10px",
+                }}
+              >
+                {historyItems.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1180,105 +1432,219 @@ function Portal() {
       </aside>
 
       {/* =====================================
-          PROFILE PANEL
+          PROFILE CARD OVERLAY & PANEL
       ===================================== */}
       {showProfile && (
-        <div className="profile-panel">
-          <div className="profile-top">
-            <h2>Profile</h2>
+        <>
+          <div
+            className="profile-overlay"
+            onClick={() => setShowProfile(false)}
+            aria-hidden="true"
+          />
+          <div className="profile-panel" ref={profileCardRef}>
+            <div className="profile-top">
+              <h2>Profile</h2>
 
-            <button
-              className="close-profile"
-              onClick={() => setShowProfile(false)}
-              aria-label="Close Profile"
-            >
-              <IconClose size={16} />
-            </button>
-          </div>
-
-          <div className="profile-picture">
-            <div className="large-avatar">
-              {user.image ? <img src={user.image} alt="profile" /> : initial}
+              <button
+                className="close-profile"
+                onClick={() => setShowProfile(false)}
+                aria-label="Close Profile"
+              >
+                <IconClose size={16} />
+              </button>
             </div>
 
-            <label className="change-picture">
-              Change picture
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleProfileImage}
-              />
-            </label>
-          </div>
+            <div className="profile-picture">
+              <div className="large-avatar">
+                {user.image ? <img src={user.image} alt="profile" /> : initial}
+              </div>
 
-          <label>NAME</label>
-          <input
-            className="profile-input"
-            value={user.name}
-            onChange={(e) =>
-              setUser({
-                ...user,
-                name: e.target.value,
-              })
-            }
-          />
-
-          <label>DEPARTMENT</label>
-          <input
-            className="profile-input"
-            value={user.department}
-            onChange={(e) =>
-              setUser({
-                ...user,
-                department: e.target.value,
-              })
-            }
-          />
-
-          <label>EMAIL</label>
-          <input
-            className="profile-input"
-            value={user.email}
-            onChange={(e) =>
-              setUser({
-                ...user,
-                email: e.target.value,
-              })
-            }
-          />
-
-          <label>PASSWORD</label>
-          <input
-            className="profile-input"
-            type="password"
-            value={user.password}
-            onChange={(e) =>
-              setUser({
-                ...user,
-                password: e.target.value,
-              })
-            }
-          />
-
-          <div className="theme-row">
-            <div>
-              <strong>Appearance</strong>
-              <span>{darkMode ? "Dark mode" : "Light mode"}</span>
+              <label className="change-picture">
+                Change picture
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfileImage}
+                />
+              </label>
             </div>
 
-            <button
-              className={`toggle ${darkMode ? "on" : ""}`}
-              onClick={() => setDarkMode(!darkMode)}
-              aria-label="Toggle theme"
-            >
-              <span />
+            <label>NAME / USERNAME</label>
+            <input
+              className="profile-input"
+              value={user.name}
+              onChange={(e) => handleUserChange("name", e.target.value)}
+            />
+
+            <label>ACCOUNT ROLE</label>
+            <input
+              className="profile-input"
+              value={user.role || "TEACHER"}
+              disabled
+              style={{ opacity: 0.7, cursor: "not-allowed" }}
+            />
+
+            <label>DEPARTMENT</label>
+            <input
+              className="profile-input"
+              value={user.department}
+              onChange={(e) => handleUserChange("department", e.target.value)}
+            />
+
+            <label>EMAIL</label>
+            <input
+              className="profile-input"
+              value={user.email}
+              onChange={(e) => handleUserChange("email", e.target.value)}
+            />
+
+            <div className="theme-row">
+              <div>
+                <strong>Appearance</strong>
+                <span>{darkMode ? "Dark mode" : "Light mode"}</span>
+              </div>
+
+              <button
+                className={`toggle ${darkMode ? "on" : ""}`}
+                onClick={() => setDarkMode(!darkMode)}
+                aria-label="Toggle theme"
+              >
+                <span />
+              </button>
+            </div>
+
+            <button className="logout-button" onClick={logout}>
+              Logout
+              <IconExternalLink size={14} />
             </button>
           </div>
+        </>
+      )}
 
-          <button className="logout-button" onClick={logout}>
-            Logout
-            <IconExternalLink size={14} />
-          </button>
+      {/* =====================================
+          ATTAINMENT HISTORY MODAL
+      ===================================== */}
+      {showHistory && (
+        <div
+          className="history-modal-overlay"
+          onClick={(e) => {
+            if (e.target.classList.contains("history-modal-overlay")) {
+              setShowHistory(false);
+            }
+          }}
+        >
+          <div className="history-modal-card">
+            <div className="history-modal-header">
+              <h2>
+                <IconHistory size={20} />
+                Attainment Calculation History
+              </h2>
+              <button
+                className="close-profile"
+                onClick={() => setShowHistory(false)}
+                aria-label="Close History"
+              >
+                <IconClose size={18} />
+              </button>
+            </div>
+
+            <div className="history-modal-body">
+              {historyItems.length === 0 ? (
+                <div className="history-empty-state">
+                  <IconHistory size={40} />
+                  <p style={{ margin: "10px 0 4px", fontWeight: "600", color: "var(--text)" }}>
+                    No Attainment History Found
+                  </p>
+                  <small>
+                    Calculated reports and outcome attainment summaries will appear here automatically.
+                  </small>
+                </div>
+              ) : (
+                <div className="history-list">
+                  {historyItems.map((item) => (
+                    <div key={item.id} className="history-item-card">
+                      <div className="history-item-main">
+                        <div className="history-item-title">
+                          <span>{item.courseCode} - {item.courseTitle}</span>
+                          <span className="calc-badge" style={{ fontSize: "10px", padding: "2px 8px" }}>
+                            {item.attainmentType?.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="history-item-meta">
+                          <span><strong>Faculty:</strong> {item.facultyName}</span>
+                          <span><strong>Dept:</strong> {item.department}</span>
+                          <span><strong>Academic Year:</strong> {item.academicYear}</span>
+                          <span><strong>Date:</strong> {item.date}</span>
+                          {item.metadata?.summary?.avgFinalCoScore && (
+                            <span style={{ color: "#6366f1", fontWeight: "600" }}>
+                              Avg CO Score: {item.metadata.summary.avgFinalCoScore} / 3.0
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="history-item-actions">
+                        <button
+                          type="button"
+                          className="history-btn-view"
+                          onClick={() => {
+                            if (item.reportHtml) {
+                              setReportHtml(item.reportHtml);
+                            }
+                            if (item.metadata) {
+                              setCalculationMetadata(item.metadata);
+                            }
+                            setSelectedSubjectCode(item.courseCode);
+                            setSelectedSubjectTitle(item.courseTitle);
+                            setFacultyName(item.facultyName);
+                            setDepartment(item.department);
+                            setAcademicYear(item.academicYear);
+                            setAttainmentType(item.attainmentType);
+                            setShowHistory(false);
+                            setCurrentStep(4);
+                            setTimeout(() => {
+                              document.getElementById("generated-report")?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              });
+                            }, 100);
+                          }}
+                        >
+                          Show on Portal
+                          <IconArrowRight size={14} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="history-btn-delete"
+                          onClick={() => deleteHistoryItem(item.id)}
+                          title="Delete this history record"
+                          aria-label="Delete history"
+                        >
+                          <IconTrash size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {historyItems.length > 0 && (
+              <div className="history-modal-footer">
+                <span style={{ fontSize: "12px", color: "var(--soft)" }}>
+                  Showing {historyItems.length} archived attainment calculation{historyItems.length > 1 ? "s" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="history-clear-all-btn"
+                  onClick={clearAllHistory}
+                >
+                  Clear All History
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -2307,11 +2673,84 @@ function Portal() {
               </div>
             </section>
 
+            {/* CALCULATION METADATA DISPLAY */}
+            {calculationMetadata && (
+              <section className="calc-metadata-container">
+                <div className="calc-metadata-header">
+                  <div className="calc-metadata-title">
+                    <IconSparkles size={20} />
+                    <h3>Attainment Calculation Analytics & Metadata</h3>
+                    <span className="calc-scroll-hint">
+                      ⇄ Scroll horizontally to view all KPI metric cards
+                    </span>
+                  </div>
+                  <span className="calc-badge">
+                    <IconCheck size={13} /> Computed Successfully
+                  </span>
+                </div>
+
+                {/* KEY PERFORMANCE INDICATORS */}
+                <div className="calc-kpi-grid">
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Total Evaluated Students</span>
+                    <span className="calc-kpi-value">
+                      {calculationMetadata.totalStudents || calculationMetadata.summary?.totalStudents || 0}
+                    </span>
+                    <span className="calc-kpi-sub">Uploaded class dataset</span>
+                  </div>
+
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Avg Direct Attainment %</span>
+                    <span className="calc-kpi-value" style={{ color: "#22c55e" }}>
+                      {calculationMetadata.summary?.avgDirectPercentage ?? "0"}%
+                    </span>
+                    <span className="calc-kpi-sub">
+                      Target CA1: {targetCA1}% · CA2: {targetCA2}%
+                    </span>
+                  </div>
+
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Average Direct Level</span>
+                    <span className="calc-kpi-value" style={{ color: "#6366f1" }}>
+                      {calculationMetadata.summary?.avgDirectLevel ?? "0"} / 3
+                    </span>
+                    <span className="calc-kpi-sub">NBA 3-tier rubrics scale</span>
+                  </div>
+
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Course Exit Survey (CES)</span>
+                    <span className="calc-kpi-value" style={{ color: "#06b6d4" }}>
+                      {calculationMetadata.survey?.cesScore ?? calculationMetadata.summary?.cesScore ?? "2.0"} / 3
+                    </span>
+                    <span className="calc-kpi-sub">
+                      X: {calculationMetadata.survey?.countX ?? 0} · Y: {calculationMetadata.survey?.countY ?? 0} · Z: {calculationMetadata.survey?.countZ ?? 0}
+                    </span>
+                  </div>
+
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Overall Final CO Score</span>
+                    <span className="calc-kpi-value" style={{ color: "#f59e0b" }}>
+                      {calculationMetadata.summary?.avgFinalCoScore ?? "0"} / 3
+                    </span>
+                    <span className="calc-kpi-sub">90% Direct + 10% Indirect (CES)</span>
+                  </div>
+
+                  <div className="calc-kpi-card">
+                    <span className="calc-kpi-label">Average PO Attainment</span>
+                    <span className="calc-kpi-value" style={{ color: "#8b5cf6" }}>
+                      {calculationMetadata.summary?.avgPoScore ?? "0"} / 3
+                    </span>
+                    <span className="calc-kpi-sub">Program outcomes mapped avg</span>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* GENERATED REPORT */}
             <section
               className="portal-section generated-report-section"
               id="generated-report"
-              style={{ marginTop: "50px" }}
+              style={{ marginTop: "30px" }}
             >
               <div className="section-title">
                 <span>02</span>
@@ -2408,7 +2847,7 @@ function Portal() {
           </div>
 
           <div className="step-nav-right">
-            {currentStep < 4 ? (
+            {currentStep < 4 && (
               <button
                 type="button"
                 className="step-nav-btn step-nav-btn-next"
@@ -2418,24 +2857,6 @@ function Portal() {
                 {currentStep === 2 && "Continue to Step 3: COs & Mapping"}
                 {currentStep === 3 && "Continue to Step 4: Calculate Attainment"}
                 <IconArrowRight size={16} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="step-nav-btn step-nav-btn-next"
-                onClick={calculateAttainment}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <>
-                    <IconSpinner size={16} /> Calculating...
-                  </>
-                ) : (
-                  <>
-                    Calculate Attainment
-                    <IconSparkles size={16} />
-                  </>
-                )}
               </button>
             )}
           </div>

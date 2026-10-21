@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/db");
+const userService = require("../services/user.service");
 
 const JWT_SECRET = process.env.JWT_SECRET || "co_po_secret_jwt_key_2026_secure_key";
 
@@ -12,11 +13,25 @@ const authenticate = async (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.userId || decoded.id;
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId || decoded.id },
-      select: { id: true, name: true, email: true, role: true },
-    });
+    let user = null;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, role: true },
+      });
+    } catch (dbErr) {
+      // Prisma DB unavailable; check fallback
+    }
+
+    if (!user) {
+      const allFallback = require("../../prisma/users.json");
+      user = allFallback.find((u) => u.id === userId);
+      if (user) {
+        user = { id: user.id, name: user.name, email: user.email, role: user.role };
+      }
+    }
 
     if (!user) {
       return res.status(401).json({ message: "Invalid user session or user not found." });

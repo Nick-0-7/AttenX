@@ -27,6 +27,7 @@ app.use(
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Content-Disposition", "X-Calculation-Summary"],
   })
 );
 app.use(express.json({ limit: "50mb" }));
